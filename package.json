@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "cli": "npm run build && node dist/src/cli/CliApp.js",
-    "test": "npm run build && node dist/test/cli-smoke.js"
+    "test": "npm run build && node dist/test/cli-smoke.js && node dist/test/phase1-validation.js"
   },
   "devDependencies": {
     "@types/node": "^22.10.1",

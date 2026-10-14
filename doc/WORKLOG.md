@@ -51,8 +51,31 @@ We ran the current validation commands and verified the project stays in a worki
 The CLI boots correctly, prints the expected banner, accepts help, and exits cleanly.
 
 ### Current residuals
-- The document model still includes a convenience lookup map in [src/model/Document.ts](src/model/Document.ts), which conflicts with the preferred tree-first lookup strategy.
-- No full Lab feature implementation was added beyond the required minimal CLI skeleton.
+- The early project skeleton did not yet include the full Phase 1 command set and some serializer typing details needed cleanup.
+- Those issues were corrected in the follow-up incremental pass without broadening beyond the course phase boundary.
+
+---
+
+## 2026-10-14 — Core Phase 1 command layer and documentation alignment
+
+### Goal
+Complete the CLI command layer required by the Phase 1 course specification and align the architecture docs with the actual implementation.
+
+### Implementation content
+- Registered the missing Phase 1 commands in [src/cli/CommandRegistry.ts](src/cli/CommandRegistry.ts): read, save, front, back, scale.
+- Added the `ScaleCommand` to support positive scaling for shapes and nested groups.
+- Updated [src/commands/HelpCommand.ts](src/commands/HelpCommand.ts) to list the expected command set.
+- Corrected the serializer typing issue in [src/model/Document.ts](src/model/Document.ts) so the tree model compiles cleanly.
+- Refreshed [doc/README.md](doc/README.md) and kept [doc/DESIGN_DECISIONS.md](doc/DESIGN_DECISIONS.md) consistent with the actual design choices.
+
+### Design judgment
+This increment keeps the architecture in the intended direction: tree-first model, command-based dispatch, and only minimal extension beyond the phase boundary.
+
+### Verification
+We verified the project still passes the TypeScript build and smoke validation with:
+- `npm test`
+
+The command layer is now aligned with the core Phase 1 CLI scope without introducing a second authoritative index or broad speculative features.
 
 ---
 
@@ -73,3 +96,23 @@ This documentation change adds no runtime behavior, and no feature implementatio
 
 ### Current status
 The project is ready for the next incremental feature step, with explicit documentation for future design choices and recorded history.
+
+---
+
+## 2026-10-14 — Git 状态误判与人工核验
+
+### 事实回顾
+AI 曾一度根据 `git push` 的终端输出，判断完整 Phase 1 实现已经同步到远端。随后人工检查 GitHub 后发现，远端仍然只保留了早期 skeleton 的 commit 历史。
+
+### 重新验证
+随后我们通过以下方式重新核验：
+- `git rev-parse HEAD`
+- `git rev-parse origin/main`
+- `git status`
+- `git log`
+- 对关键文件内容进行直接检查
+
+### 结论
+最终确认：完整实现实际上仍然只是当前 working-tree 的修改，还没有进入任何 commit；因此之前关于“push 已完成”的结论是错误的。
+
+后续我们改为采用“commit 状态 + remote-tracking ref + working tree”三者交叉确认的方式，而不再只依赖一次 `git push` 输出。

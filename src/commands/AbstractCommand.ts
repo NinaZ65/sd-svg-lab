@@ -5,5 +5,5 @@ export abstract class AbstractCommand implements Command {
   public abstract readonly name: string;
   public abstract readonly description: string;
 
-  public abstract execute(context: CommandContext): void;
+  public abstract execute(context: CommandContext, args: string[]): void;
 }
