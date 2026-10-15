@@ -17,6 +17,20 @@ function expect(condition: boolean, message: string): void {
 }
 
 function main(): void {
+  const output0 = runCli([
+    'init 800 600',
+    'create g flowchart',
+    'create rect r1 10 20 100 50 red in flowchart',
+    'create text t1 20 40 "hello" in flowchart',
+    'tree',
+    'show r1',
+    'exit',
+  ].join('\n'));
+  expect(output0.includes('g#flowchart'), 'group should be created before child insertion');
+  expect(output0.includes('rect#r1 x=10 y=20 w=100 h=50 fill=red'), 'rect should be created as a child of the target group');
+  expect(output0.includes('text#t1 (20,40) "hello"'), 'text should be created as a child of the target group');
+  expect(output0.includes('parent=g#flowchart'), 'show should report the actual parent container for created-in-group children');
+
   const output1 = runCli([
     'init 200 100',
     'create rect r1 0 0 10 10 red',

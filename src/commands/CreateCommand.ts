@@ -26,11 +26,12 @@ export class CreateCommand extends AbstractCommand {
     let payload = rest;
     const inIndex = rest.lastIndexOf('in');
     if (inIndex >= 0) {
-      const next = rest[inIndex + 1];
       if (inIndex + 2 !== rest.length) {
-        payload = rest.slice(0, inIndex);
-        containerId = next;
+        context.output.error('invalid create syntax');
+        return;
       }
+      containerId = rest[inIndex + 1];
+      payload = rest.slice(0, inIndex);
     }
 
     try {
