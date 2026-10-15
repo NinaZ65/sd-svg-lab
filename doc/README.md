@@ -111,9 +111,11 @@ This is consistent with the requirement to keep the document and shape model ind
 
 ## 5. 过程记录
 
-The main architectural correction during this phase was to avoid a second authoritative shape registry. The project uses the SVG tree as the source of truth for lookup and mutation, and the model is intentionally built around that design rather than a separate parallel map.
+The most important architectural correction in this phase was the shift from the earlier Map-based lookup idea to the final tree-first model. At one point, the document model carried a convenience lookup structure alongside the recursive tree, which created a second source of truth: the in-memory model could be traversed through the SVG tree, but a separate map introduced a hidden risk of drift and inconsistency. We explicitly treated that as a design tension rather than silently accepting it. The final decision was to make the SVG tree the authoritative state and keep `findById()` as a tree traversal helper rather than a parallel index. This made child/parent relationships, nested group operations, and move/scale semantics consistent with the actual DOM-like structure of SVG.
 
-The command layer was then expanded to cover the core Phase 1 operations and the smoke validation loop was kept focused on real, observable behavior: CLI startup, command registration, and basic model traversal.
+The process also included a concrete Git verification correction. At one point, the AI relied on a single `git push` terminal output and concluded that the complete Phase 1 implementation had been synchronized to GitHub. A human check of the remote then showed that the remote still only had the older skeleton history. We subsequently re-verified with `git rev-parse HEAD`, `git rev-parse origin/main`, `git status`, and `git log`, and also inspected the real file contents. The result was clear: the full Phase 1 implementation was still only present as working-tree modifications and had not entered any commit. That corrected the earlier conclusion and established the rule that Git status is judged using the combined evidence of commit state, remote-tracking refs, and the working tree, rather than a single terminal output alone.
+
+This phase therefore documents the key AI collaboration pattern: identify the tension, validate it with actual code and Git facts, then reduce the architecture to a consistent design before claiming completion.
 
 ## 6. 一致性自查
 
@@ -125,11 +127,17 @@ The checked code keeps the dependency direction aligned with the rules above. No
 
 ## 7. 质量保证手段
 
-The project verifies correctness through a small but relevant validation loop:
+The project’s quality assurance is based on the actual validation commands that were executed for this Phase 1 implementation, not on a generic smoke-only story.
 
-- `npm test` for build and smoke validation.
-- CLI startup check via `help` and `exit`.
-- tree-based lookup tests for nested IDs.
-- design documentation that records architectural rules and prevents silent drift.
+- TypeScript build: `npm run build` ensures the project compiles cleanly.
+- CLI smoke test: the startup path is validated by running the REPL with `help` and `exit`, confirming the banner, command list, and clean shutdown.
+- `test/phase1-validation.ts`: this is the main functional acceptance script for the Phase 1 behavior. It exercises the real CLI and asserts the required semantics for:
+  - composite `move` and `scale` on a `g` container and nested child nodes;
+  - `undo` and `redo` behavior;
+  - the IO barrier after `save` / `read` / `init` / `canvas`, where undo is disallowed and a later edit remains valid;
+  - invalid positive-scale rejection (`scale factor must be positive`) without mutating state;
+  - `set` attribute whitelist enforcement and unknown attribute rejection;
+  - SVG `read` auto-id assignment and warning output for unnamed elements;
+  - tree-based nested ID lookup.
 
-This keeps the implementation aligned with the Lab 1 requirements without overbuilding the project beyond the phase boundary.
+This validation covers the real milestones expected by the assignment: tree model correctness, command behavior, composite mutation, undo/redo semantics, IO boundary rules, and file round-trip safety. The result is a concrete assurance that the implementation is functionally complete for Phase 1 rather than merely compiling or starting successfully.
