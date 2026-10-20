@@ -24,18 +24,21 @@ export class UngroupCommand extends AbstractCommand {
     }
 
     const parent = group.getParent();
-    if (!parent) {
+    if (!parent || parent === context.document.getRoot()) {
       context.output.error(`cannot ungroup top-level container: ${group.id}`);
       return;
     }
 
     const groupIndex = parent.indexOf(group);
     const children = [...group.getChildren()];
-    parent.removeChild(group);
-    for (const child of children) {
-      group.removeChild(child);
-      parent.addChild(child);
-    }
+    const liftChildren = (): void => {
+      parent.removeChild(group);
+      for (const [offset, child] of children.entries()) {
+        group.removeChild(child);
+        parent.insertChild(groupIndex + offset, child);
+      }
+    };
+    liftChildren();
 
     context.recordAction({
       undo: () => {
@@ -50,19 +53,7 @@ export class UngroupCommand extends AbstractCommand {
           group.addChild(child);
         }
       },
-      redo: () => {
-        const currentParent = group.getParent();
-        if (currentParent) {
-          currentParent.removeChild(group);
-        }
-        for (const child of [...children]) {
-          const childParent = child.getParent();
-          if (childParent) {
-            childParent.removeChild(child);
-          }
-          parent.addChild(child);
-        }
-      },
+      redo: liftChildren,
     });
 
     context.output.writeLine(`${group.getDisplayName()} ungrouped`);

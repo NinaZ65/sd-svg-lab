@@ -26,11 +26,19 @@ export class AddtoCommand extends AbstractCommand {
     }
 
     const parent = child.getParent();
-    const index = parent ? parent.indexOf(child) : -1;
-    if (parent) {
-      parent.removeChild(child);
+    if (!parent) {
+      context.output.error(`cannot move root container: ${child.id}`);
+      return;
+    }
+    for (let ancestor: GroupShape | null = group; ancestor; ancestor = ancestor.getParent()) {
+      if (ancestor === child) {
+        context.output.error(`cannot add a container into its own descendant: ${child.id}`);
+        return;
+      }
     }
 
+    const index = parent.indexOf(child);
+    parent.removeChild(child);
     group.addChild(child);
     context.recordAction({
       undo: () => {
@@ -41,7 +49,7 @@ export class AddtoCommand extends AbstractCommand {
       },
       redo: () => {
         const activeParent = child.getParent();
-        if (activeParent && activeParent !== group) {
+        if (activeParent) {
           activeParent.removeChild(child);
         }
         group.addChild(child);
