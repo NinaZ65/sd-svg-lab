@@ -26,63 +26,55 @@ export class SetCommand extends AbstractCommand {
     const value = args.slice(2).join(' ');
 
     let oldValue: number | string | undefined;
-    let nextValue: number | string | undefined;
+    let applyValue: ((next: number | string | undefined) => void) | undefined;
 
-    const setValue = (next: number | string): void => {
-      if (target instanceof RectShape) {
-        if (attr === 'x') { oldValue = target.x; target.x = Number(next); }
-        else if (attr === 'y') { oldValue = target.y; target.y = Number(next); }
-        else if (attr === 'width') { oldValue = target.width; target.width = Number(next); }
-        else if (attr === 'height') { oldValue = target.height; target.height = Number(next); }
-        else if (attr === 'fill') { oldValue = target.fill; target.fill = String(next); }
-        else { context.output.error(`unknown attribute: ${attr}`); return; }
-      } else if (target instanceof CircleShape) {
-        if (attr === 'cx') { oldValue = target.cx; target.cx = Number(next); }
-        else if (attr === 'cy') { oldValue = target.cy; target.cy = Number(next); }
-        else if (attr === 'r') { oldValue = target.r; target.r = Number(next); }
-        else if (attr === 'fill') { oldValue = target.fill; target.fill = String(next); }
-        else { context.output.error(`unknown attribute: ${attr}`); return; }
-      } else if (target instanceof EllipseShape) {
-        if (attr === 'cx') { oldValue = target.cx; target.cx = Number(next); }
-        else if (attr === 'cy') { oldValue = target.cy; target.cy = Number(next); }
-        else if (attr === 'rx') { oldValue = target.rx; target.rx = Number(next); }
-        else if (attr === 'ry') { oldValue = target.ry; target.ry = Number(next); }
-        else if (attr === 'fill') { oldValue = target.fill; target.fill = String(next); }
-        else { context.output.error(`unknown attribute: ${attr}`); return; }
-      } else if (target instanceof LineShape) {
-        if (attr === 'x1') { oldValue = target.x1; target.x1 = Number(next); }
-        else if (attr === 'y1') { oldValue = target.y1; target.y1 = Number(next); }
-        else if (attr === 'x2') { oldValue = target.x2; target.x2 = Number(next); }
-        else if (attr === 'y2') { oldValue = target.y2; target.y2 = Number(next); }
-        else if (attr === 'stroke') { oldValue = target.stroke; target.stroke = String(next); }
-        else { context.output.error(`unknown attribute: ${attr}`); return; }
-      } else if (target instanceof TextShape) {
-        if (attr === 'x') { oldValue = target.x; target.x = Number(next); }
-        else if (attr === 'y') { oldValue = target.y; target.y = Number(next); }
-        else if (attr === 'text') { oldValue = target.text; target.text = String(next); }
-        else { context.output.error(`unknown attribute: ${attr}`); return; }
-      } else {
-        context.output.error(`unknown attribute: ${attr}`);
-        return;
-      }
+    if (target instanceof RectShape) {
+      if (attr === 'x') { oldValue = target.x; applyValue = next => { target.x = Number(next); }; }
+      else if (attr === 'y') { oldValue = target.y; applyValue = next => { target.y = Number(next); }; }
+      else if (attr === 'width') { oldValue = target.width; applyValue = next => { target.width = Number(next); }; }
+      else if (attr === 'height') { oldValue = target.height; applyValue = next => { target.height = Number(next); }; }
+      else if (attr === 'fill') { oldValue = target.fill; applyValue = next => { target.fill = next as string | undefined; }; }
+    } else if (target instanceof CircleShape) {
+      if (attr === 'cx') { oldValue = target.cx; applyValue = next => { target.cx = Number(next); }; }
+      else if (attr === 'cy') { oldValue = target.cy; applyValue = next => { target.cy = Number(next); }; }
+      else if (attr === 'r') { oldValue = target.r; applyValue = next => { target.r = Number(next); }; }
+      else if (attr === 'fill') { oldValue = target.fill; applyValue = next => { target.fill = next as string | undefined; }; }
+    } else if (target instanceof EllipseShape) {
+      if (attr === 'cx') { oldValue = target.cx; applyValue = next => { target.cx = Number(next); }; }
+      else if (attr === 'cy') { oldValue = target.cy; applyValue = next => { target.cy = Number(next); }; }
+      else if (attr === 'rx') { oldValue = target.rx; applyValue = next => { target.rx = Number(next); }; }
+      else if (attr === 'ry') { oldValue = target.ry; applyValue = next => { target.ry = Number(next); }; }
+      else if (attr === 'fill') { oldValue = target.fill; applyValue = next => { target.fill = next as string | undefined; }; }
+    } else if (target instanceof LineShape) {
+      if (attr === 'x1') { oldValue = target.x1; applyValue = next => { target.x1 = Number(next); }; }
+      else if (attr === 'y1') { oldValue = target.y1; applyValue = next => { target.y1 = Number(next); }; }
+      else if (attr === 'x2') { oldValue = target.x2; applyValue = next => { target.x2 = Number(next); }; }
+      else if (attr === 'y2') { oldValue = target.y2; applyValue = next => { target.y2 = Number(next); }; }
+      else if (attr === 'stroke') { oldValue = target.stroke; applyValue = next => { target.stroke = next as string | undefined; }; }
+    } else if (target instanceof TextShape) {
+      if (attr === 'x') { oldValue = target.x; applyValue = next => { target.x = Number(next); }; }
+      else if (attr === 'y') { oldValue = target.y; applyValue = next => { target.y = Number(next); }; }
+      else if (attr === 'text') { oldValue = target.text; applyValue = next => { target.text = String(next); }; }
+    }
 
-      nextValue = next;
-    };
-
-    const nextNum = Number(value);
-    const nextValueToApply = Number.isFinite(nextNum) ? nextNum : value;
-    setValue(nextValueToApply);
-    if (oldValue === undefined || nextValue === undefined) {
+    if (!applyValue) {
+      context.output.error(`unknown attribute: ${attr}`);
       return;
     }
 
+    const previousValue = oldValue;
+    const nextValue = ['fill', 'stroke', 'text'].includes(attr) ? value : Number(value);
+    if (typeof nextValue === 'number' && !Number.isFinite(nextValue)) {
+      context.output.error(`invalid numeric value: ${value}`);
+      return;
+    }
+
+    // Capture values once. Applying undo/redo must never rewrite their payload.
+    const apply = applyValue;
+    apply(nextValue);
     context.recordAction({
-      undo: () => {
-        setValue(oldValue as number | string);
-      },
-      redo: () => {
-        setValue(nextValue as number | string);
-      },
+      undo: () => apply(previousValue),
+      redo: () => apply(nextValue),
     });
 
     context.output.writeLine(`${target.getDisplayName()} updated: ${attr}=${value}`);
