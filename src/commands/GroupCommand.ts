@@ -1,5 +1,6 @@
 import { AbstractCommand } from './AbstractCommand';
 import { CommandContext } from './CommandContext';
+import { Shape } from '../model/Shape';
 import { GroupShape } from '../model/shapes/GroupShape';
 
 export class GroupCommand extends AbstractCommand {
@@ -20,8 +21,8 @@ export class GroupCommand extends AbstractCommand {
       return;
     }
 
-    const group = new GroupShape(newId);
-    const originalEntries: Array<{ shape: any; parent: any; index: number }> = [];
+    const originalEntries: Array<{ shape: Shape; parent: GroupShape; index: number }> = [];
+    const targets = new Set<Shape>();
 
     for (const id of targetIds) {
       const shape = context.document.findById(id);
@@ -36,7 +37,27 @@ export class GroupCommand extends AbstractCommand {
         return;
       }
 
+      if (targets.has(shape)) {
+        context.output.error(`duplicate shape id: ${id}`);
+        return;
+      }
+      targets.add(shape);
       originalEntries.push({ shape, parent, index: parent.indexOf(shape) });
+    }
+
+    for (const { shape } of originalEntries) {
+      for (let ancestor = shape.getParent(); ancestor; ancestor = ancestor.getParent()) {
+        if (targets.has(ancestor)) {
+          context.output.error(`cannot group a container into its own descendant: ${ancestor.id}`);
+          return;
+        }
+      }
+    }
+
+    const group = new GroupShape(newId);
+    // Restore each parent's children in ascending original index, regardless of input order.
+    const restorationEntries = [...originalEntries].sort((a, b) => a.index - b.index);
+    for (const { shape, parent } of originalEntries) {
       parent.removeChild(shape);
       group.addChild(shape);
     }
@@ -45,7 +66,7 @@ export class GroupCommand extends AbstractCommand {
     context.recordAction({
       undo: () => {
         context.document.getRoot().removeChild(group);
-        for (const entry of originalEntries) {
+        for (const entry of restorationEntries) {
           const { shape, parent, index } = entry;
           group.removeChild(shape);
           parent.insertChild(index, shape);
