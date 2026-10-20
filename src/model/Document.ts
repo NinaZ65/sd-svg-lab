@@ -1,11 +1,7 @@
 import { Shape } from './Shape';
 import { SvgCanvas } from './SvgCanvas';
-import { CircleShape } from './shapes/CircleShape';
-import { EllipseShape } from './shapes/EllipseShape';
 import { GroupShape } from './shapes/GroupShape';
-import { LineShape } from './shapes/LineShape';
-import { RectShape } from './shapes/RectShape';
-import { TextShape } from './shapes/TextShape';
+import { ShapeFactory } from './shapes/ShapeFactory';
 
 export class Document {
   private canvas: SvgCanvas;
@@ -231,7 +227,7 @@ export class Document {
 
   private parseAttributes(rawTag: string): Record<string, string> {
     const attributes: Record<string, string> = {};
-    const regex = /([A-Za-z:_-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/g;
+    const regex = /([A-Za-z:_-][A-Za-z0-9:_-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/g;
 
     let match: RegExpExecArray | null;
     while ((match = regex.exec(rawTag)) !== null) {
@@ -265,59 +261,6 @@ export class Document {
       seenIds.add(id);
     }
 
-    if (tagName === 'g') {
-      return new GroupShape(id);
-    }
-
-    if (tagName === 'rect') {
-      return new RectShape(
-        id,
-        Number(attributes.x ?? 0),
-        Number(attributes.y ?? 0),
-        Number(attributes.width ?? 0),
-        Number(attributes.height ?? 0),
-        attributes.fill ?? undefined,
-      );
-    }
-
-    if (tagName === 'circle') {
-      return new CircleShape(
-        id,
-        Number(attributes.cx ?? 0),
-        Number(attributes.cy ?? 0),
-        Number(attributes.r ?? 0),
-        attributes.fill ?? undefined,
-      );
-    }
-
-    if (tagName === 'ellipse') {
-      return new EllipseShape(
-        id,
-        Number(attributes.cx ?? 0),
-        Number(attributes.cy ?? 0),
-        Number(attributes.rx ?? 0),
-        Number(attributes.ry ?? 0),
-        attributes.fill ?? undefined,
-      );
-    }
-
-    if (tagName === 'line') {
-      return new LineShape(
-        id,
-        Number(attributes.x1 ?? 0),
-        Number(attributes.y1 ?? 0),
-        Number(attributes.x2 ?? 0),
-        Number(attributes.y2 ?? 0),
-        attributes.stroke ?? undefined,
-      );
-    }
-
-    if (tagName === 'text') {
-      const x = Number(attributes.x ?? 0);
-      const y = Number(attributes.y ?? 0);
-      return new TextShape(id, x, y, textContent.trim());
-    }
-
-    return undefined;
+    return ShapeFactory.fromSvg(tagName, id, attributes, textContent);
   }
 }
