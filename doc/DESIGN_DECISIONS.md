@@ -93,6 +93,7 @@ MoveCommand
 - target
 - dx
 - dy
+- local geometry restoration for exact undo (no inverse floating point calculation)
 ```
 
 ```text
@@ -117,6 +118,7 @@ DeleteCommand
 - Commands must know how to undo themselves using the recorded state.
 - The undo payload should be as small as possible while still preserving correctness.
 - A command may keep local state beyond the immediate target if that is necessary for a correct reverse action.
+- The current implementation records undo/redo closures as `HistoryAction`. Captured old/new values and parent/index payloads remain stable when those closures run. `Shape.captureGeometry()` supplies local restoration closures for transforms, not a full-document snapshot.
 
 ### Future adjustment conditions
 If a command proves too complex to reverse without more context, then the command may record a minimal local snapshot. However, full-document deep copies remain a fallback and not the preferred design.
@@ -236,6 +238,7 @@ The project will not scatter type-to-class logic across CLI, command, and model 
 ### Implementation constraints
 - A single factory or equivalent factory entry point should create the appropriate concrete shape.
 - The project may still keep a small centralized dispatch table in that factory.
+- Both CLI create and SVG read use this mapping: `Document.createShape()` delegates to `ShapeFactory.fromSvg()`, which converts SVG attributes and calls `ShapeFactory.create()`. Direct construction of a known structural Group does not introduce another type-name dispatch.
 - This is an accepted local exception to the general rule against type-based branching because it is a clearly identified change point.
 
 ### Future adjustment conditions
@@ -335,11 +338,16 @@ When a new feature is introduced, we will:
 
 ---
 
-## 12. Current known design tension
+## 12. Historical corrections and remaining design boundaries
 
-At the time of this document, one known difference exists between the preferred architecture and the current implementation:
+The early skeleton contained a Map-based document index. That historical tension is resolved: Document delegates id lookup to the SVG tree and maintains no second authoritative id index. Earlier WORKLOG entries describe their state at the time and remain intact.
 
-- The document model currently contains a Map-based index in its implementation.
-- This is a local compromise that can be convenient for quick lookup, but it conflicts with the preferred design for this project phase.
+The 2026-10-20 audit also corrected a second shape-creation dispatch in Document and moved recursive move/scale behavior from commands into polymorphic Shape/Group operations. Group validation and stable Set history were verified with failing tests before fixes; related addto/ungroup structure errors were likewise reproduced and corrected.
 
-This is recorded here as a known issue, not as a silent architectural violation. The plan is to treat this as a tracked constraint and resolve it only when the project reaches a phase where the trade-off is justified, or when a later refactor is explicitly requested.
+Remaining boundaries are explicit rather than claimed to be fully solved:
+
+- `Document.serializeShape()` and `SetCommand` still contain concrete-type knowledge, and leaf geometry is public. Future providers would need to address those points; factory centralization alone does not complete plugin support or full encapsulation.
+- `CommandContext` depends on `ConsoleOutput`; a GUI/Agent needs an output adapter or narrower output interface.
+- The handwritten SVG parser supports a limited subset. Built-in round-trip checks are not proof of full XML/SVG compatibility.
+
+These points are recorded for later evidence-driven evolution. This pass does not add a plugin manager, general property framework, or unrelated broad refactor.
