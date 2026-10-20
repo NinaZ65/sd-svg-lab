@@ -11,6 +11,13 @@ export abstract class Shape {
 
   public abstract renderTree(depth: number): string[];
 
+  public abstract move(dx: number, dy: number): void;
+
+  public abstract scale(factor: number): void;
+
+  // Capture only local geometry; restoring exact values avoids inverse-transform rounding drift.
+  public abstract captureGeometry(): () => void;
+
   public findById(id: string): Shape | undefined {
     if (this.id === id) {
       return this;

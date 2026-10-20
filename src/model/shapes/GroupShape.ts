@@ -59,6 +59,27 @@ export class GroupShape extends Shape {
     return 'g';
   }
 
+  public move(dx: number, dy: number): void {
+    for (const child of this.children) {
+      child.move(dx, dy);
+    }
+  }
+
+  public scale(factor: number): void {
+    for (const child of this.children) {
+      child.scale(factor);
+    }
+  }
+
+  public captureGeometry(): () => void {
+    const restorations = this.children.map(child => child.captureGeometry());
+    return () => {
+      for (const restore of restorations) {
+        restore();
+      }
+    };
+  }
+
   public getDisplayName(): string {
     return `g#${this.id}`;
   }
