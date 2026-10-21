@@ -1,353 +1,349 @@
-# Design Decisions
+# 设计决策
 
-This document records the concrete decisions made under the constraints of the course requirement in [phase_cli_1.md](phase_cli_1.md). It does not replace the course specification; it only defines how the project will resolve choices that are intentionally left open by the assignment.
+本文记录在[课程要求](../phase_cli_1.md)约束下作出的具体设计选择。本文不替代课程规范，只说明作业留有选择空间时，项目采用哪种实现方式。
 
-The core rule is simple:
+基本规则如下：
 
-- [phase_cli_1.md](phase_cli_1.md) defines what must be implemented.
-- This document defines how we will implement it when there is more than one acceptable design choice.
-- We must not weaken or reinterpret the course semantics in order to simplify the code.
+- [课程要求](../phase_cli_1.md)规定必须实现的内容。
+- 本文规定存在多种可行方案时采用的实现方式。
+- 不得为了简化代码而削弱或重新解释课程规定的语义。
 
 ---
 
-## 1. Group uses the Composite design
+## 1. 分组采用组合模式
 
-### Decision
-Group is not treated as a separate special-case container type. It is part of the same Shape abstraction as leaf nodes.
+### 决策
 
-The intended model is:
+分组与叶子节点共享 `Shape` 抽象，不作为独立的特殊容器类型处理。
+
+预期结构为：
 
 ```text
-Shape
-├── Rect
-├── Circle
-├── Ellipse
-├── Line
-├── Text
-└── Group
+Shape（图形）
+├── Rect（矩形）
+├── Circle（圆）
+├── Ellipse（椭圆）
+├── Line（线段）
+├── Text（文字）
+└── Group（分组）
 ```
 
-with:
+分组持有 `Shape[]` 类型的子节点集合。调用方应通过统一接口操作图形，避免依靠“如果是分组则……否则……”这样的类型判断实现业务行为。
+
+### 理由
+
+- 符合 SVG 本身的嵌套树形结构。
+- 满足课程要求的组合语义。
+- 减少调用层按具体类型分支的情况。
+- 为后续 `box` 等复合图形插件提供清晰基础。
+
+### 实现约束
+
+- 移动、缩放、删除、遍历等对子节点的操作应通过多态行为表达。
+- 分组应在适当情况下递归地把操作传递给子节点。
+- 不需要递归的操作仍应适用于叶子图形。
+
+### 后续调整条件
+
+如果后续阶段发现单纯递归不足以支持某些操作，可以调整分组接口，但必须保留组合模式这一基本边界。
+
+---
+
+## 2. 标识符查找暂用树遍历，不维护第二份全局索引
+
+### 决策
+
+通过 `document.findById(id)` 或等价的树遍历，从 SVG 结构本身定位元素。
+
+当前阶段不维护独立的权威 `Map<string, Shape>`，除非有证据证明存在真实的性能问题。
+
+### 理由
+
+- SVG 文档天然是一棵树。
+- 当前项目规模较小，正确性比查找优化更重要。
+- 第二份索引需要与创建、删除、分组、解组、读入及撤销/重做同步。
+- 第一阶段尚无证据表明这些额外复杂度值得引入。
+
+### 实现约束
+
+- 仍须严格保证标识符唯一。
+- SVG 树始终是唯一权威状态。
+- 如果未来增加查找缓存，它只能是辅助索引，不能成为第二份权威状态。
+
+### 后续调整条件
+
+只有真实性能测试或规模分析证明遍历成为瓶颈时，才重新评估索引方案。届时应明确其缓存性质及一致性维护规则。
+
+---
+
+## 3. 撤销与重做保存最小必要逆操作信息
+
+### 决策
+
+采用命令模式，不为每条命令深拷贝整个文档。
+
+每条命令保存撤销自身所需的最小状态。例如：
+
+| 命令 | 保存的信息 |
+|---|---|
+| `MoveCommand` | 目标、横纵位移，以及用于精确撤销的局部几何恢复信息，避免反向浮点运算 |
+| `SetCommand` | 旧值与新值 |
+| `DeleteCommand` | 被删除图形、原父节点、原同级位置 |
+
+### 理由
+
+- 符合命令模式的职责划分。
+- 避免反复复制整个文档快照。
+- 每条命令的逆操作逻辑清晰可见，不隐藏在文档克隆中。
+
+### 实现约束
+
+- 命令必须能够根据保存的信息撤销自身。
+- 在保证正确性的前提下，历史载荷应尽量小。
+- 如果精确恢复需要，可以保存目标之外的必要局部状态。
+- 当前实现以 `HistoryAction` 记录撤销/重做闭包。闭包执行时，捕获的旧值、新值、原父节点和原同级位置必须保持稳定。变换操作通过 `Shape.captureGeometry()` 获取局部恢复闭包，不保存整个文档快照。
+
+### 后续调整条件
+
+如果某条命令无法仅靠简单逆操作恢复，可以保存最小局部快照。整份文档深拷贝仅作为后备方案，不是首选设计。
+
+---
+
+## 4. 结构操作恢复原父节点及同级位置
+
+### 决策
+
+删除、分组、解组、移入容器、置前、置后等所有改变树结构的操作，撤销时都必须恢复原父节点及原同级位置。
+
+对受影响元素保存的信息包括：
 
 ```text
-Group has children: Shape[]
+originalParent（原父节点）
+originalIndex（原同级位置）
 ```
 
-Calling code should operate on a uniform interface instead of branching on a type check like:
+### 理由
 
-```ts
-if (shape is Group) { ... }
-else { ... }
-```
+- SVG 子节点顺序影响图形的叠放顺序，具有实际语义。
+- 课程要求结构操作语义正确。
+- 只恢复元素、不恢复父节点内的位置，会改变同级节点顺序。
 
-### Reason
-- It matches the nested and tree-like structure of SVG itself.
-- It satisfies the Composite semantics required by the course.
-- It reduces type-driven branching in the calling layer.
-- It creates a clean foundation for future composite shapes such as box-style plugins.
+### 实现约束
 
-### Implementation constraints
-- Child operations such as move, scale, delete, and traversal must be expressed through polymorphic behavior.
-- Group must propagate recursive operations to its children when appropriate.
-- Non-recursive operations remain valid for leaf shapes.
+- 每条结构修改命令都必须记录受影响元素的原结构位置。
+- 撤销时同时恢复父子关系和同级顺序。
+- 验证时应检查顺序完全恢复，不能只检查元素仍然存在。
 
-### Future adjustment conditions
-If a later phase reveals that recursive propagation is not sufficient for certain operations, the Group contract may evolve, but the general Composite principle remains the boundary we will not cross.
+### 后续调整条件
+
+如果后续引入更复杂的容器语义，可以扩充记录内容，但恢复父节点和同级位置始终是必要要求。
 
 ---
 
-## 2. id lookup uses tree traversal for now, not a second global index
+## 5. 所有修改操作遵循“先验证，再修改”
 
-### Decision
-The project will use document.findById(id) or equivalent tree traversal to locate an element from the SVG structure itself.
+### 决策
 
-We will not maintain a separate authoritative Map<string, Shape> for the current phase unless a real performance problem is demonstrated.
+在任何状态修改之前，先验证请求的全部操作在当前文档中是否合法。
 
-### Reason
-- The SVG document is naturally a tree.
-- The current project is small and correctness matters more than lookup optimization.
-- A second index would require synchronization with create, delete, group, ungroup, read, and undo/redo logic.
-- This complexity is not justified in Phase 1.
-
-### Implementation constraints
-- id uniqueness must still be enforced rigorously.
-- The tree remains the primary source of truth.
-- If a future phase adds a lookup cache, it must be treated as an auxiliary index and not as a second authority.
-
-### Future adjustment conditions
-This may be re-evaluated only if real performance tests or scale analysis show that traversal becomes a bottleneck. The index must then be documented as a cache with a clear consistency policy.
-
----
-
-## 3. Undo/Redo stores the minimal necessary reverse information
-
-### Decision
-The project will use the Command Pattern, but not by deep-copying the entire document for every command.
-
-Instead, each command should store the minimal state needed to reverse itself.
-
-Examples:
+执行流程为：
 
 ```text
-MoveCommand
-- target
-- dx
-- dy
-- local geometry restoration for exact undo (no inverse floating point calculation)
+验证
+→ 确认整条命令合法
+→ 修改状态
 ```
 
-```text
-SetCommand
-- oldValue
-- newValue
-```
+### 理由
 
-```text
-DeleteCommand
-- deletedShape
-- originalParent
-- originalIndex
-```
+- 课程明确规定失败命令不能改变任何状态。
+- 部分修改后才发现错误，会留下结构不一致和隐蔽缺陷。
+- 分组、跨父节点移动及标识符冲突等场景尤其需要完整预验证。
 
-### Reason
-- This keeps the design aligned with the responsibilities of Command.
-- It avoids unnecessary mass snapshot copying.
-- It exposes the exact reversal logic in each command instead of burying it in a document clone.
+### 实现约束
 
-### Implementation constraints
-- Commands must know how to undo themselves using the recorded state.
-- The undo payload should be as small as possible while still preserving correctness.
-- A command may keep local state beyond the immediate target if that is necessary for a correct reverse action.
-- The current implementation records undo/redo closures as `HistoryAction`. Captured old/new values and parent/index payloads remain stable when those closures run. `Shape.captureGeometry()` supplies local restoration closures for transforms, not a full-document snapshot.
+- 任何修改发生前，必须检查全部前置条件。
+- 验证失败后，模型状态必须与执行前完全等价。
+- 依赖文档状态的验证属于命令层或模型层，不属于解析器。
 
-### Future adjustment conditions
-If a command proves too complex to reverse without more context, then the command may record a minimal local snapshot. However, full-document deep copies remain a fallback and not the preferred design.
+### 后续调整条件
+
+未来即使增加更丰富的验证和错误信息，仍须遵循先验证、再修改的顺序。
 
 ---
 
-## 4. Structural operations restore parent and sibling index
+## 6. 解析器负责语法，不负责文档业务语义
 
-### Decision
-Any operation that changes the tree structure, including delete, group, ungroup, addto, front, and back, must preserve the original parent and sibling index information when undoing.
+### 决策
 
-This includes storing:
+解析器负责把输入文本转成结构化命令请求，不负责根据当前 SVG 文档判断操作是否合法。
 
-```text
-originalParent
-originalIndex
-```
+解析器的职责包括：
 
-for affected elements.
+- 对输入分词。
+- 解析数字字面量。
+- 处理引号包裹的字符串。
+- 识别命令名和参数。
+- 识别 `in <containerId>` 等语法形式。
 
-### Reason
-- SVG child order is semantically meaningful and impacts z-order.
-- The course requires correct structural semantics.
-- A naive undo that restores only the elements but not the positions in the parent can reorder siblings incorrectly.
+命令层或模型层的职责包括：
 
-### Implementation constraints
-- Every structural mutation command must record the original structural location of affected elements.
-- Undo must restore both the parent relationship and the sibling order.
-- The command should check that the order is exactly restored, not just that the elements are present.
+- 检查标识符是否重复。
+- 检查目标是否存在。
+- 检查目标是否为容器。
+- 检查分组或移动操作是否会形成环。
 
-### Future adjustment conditions
-If later phases introduce more complex container semantics, the recording format may become richer, but the restoration of parent and index remains mandatory.
+### 理由
 
----
+- 解析器应理解文本结构，不应依赖实时文档状态。
+- 保持职责清晰，减少耦合。
+- 便于测试和扩展。
 
-## 5. All mutating operations follow validate-before-mutate
+### 实现约束
 
-### Decision
-Before any mutation happens, an operation must validate that the full requested action is legal in the current document state.
+- 解析器可以拒绝格式错误的输入。
+- 解析器不负责维护文档完整性规则。
+- 所有依赖状态的验证都属于命令层或文档模型。
 
-The flow is:
+### 后续调整条件
 
-```text
-validate
-→ confirm the whole command is legal
-→ mutate
-```
-
-### Reason
-- The course explicitly says that failing commands must not change any state.
-- A partial mutation followed by a later failure creates inconsistent structure and hidden bugs.
-- This is especially important for group operations, cross-parent moves, and ID conflicts.
-
-### Implementation constraints
-- Validation must check all prerequisites before any mutation is applied.
-- If validation fails, the document must remain byte-for-byte equivalent to its pre-command state as far as the model is concerned.
-- The validation logic belongs to the command/model layer, not the parser.
-
-### Future adjustment conditions
-If the project later adds richer validation with richer error reporting, the same principle remains in force: validate first, mutate second.
+如果后续引入更丰富的命令语法或抽象语法树，仍应保持这一职责分离。
 
 ---
 
-## 6. Parser handles syntax, not document semantics
+## 7. 图形创建分派集中在图形工厂
 
-### Decision
-The parser is responsible for turning input text into a structured command request. It is not responsible for checking the stateful validity of a command against the current SVG document.
+### 决策
 
-Examples of parser responsibilities:
-- tokenizing input
-- parsing numeric literals
-- decoding quoted strings
-- identifying the command name and arguments
-- recognizing syntactic forms such as in <containerId>
+类型名称到具体图形实现的映射必须集中管理。
 
-Examples of model responsibilities:
-- checking whether a given id already exists
-- checking whether the target id exists
-- checking whether the target is a container
-- checking whether a group would create a cycle
+第一阶段内置类型包括矩形 `rect`、圆 `circle`、椭圆 `ellipse`、线段 `line`、文字 `text` 和分组 `g`。
 
-### Reason
-- The parser should understand text structure, not live document state.
-- This keeps responsibilities clean and reduces coupling.
-- It is easier to test and extend.
+不得把类型名称到具体类的分派逻辑散落在命令行、命令和模型代码中。
 
-### Implementation constraints
-- The parser may fail on malformed syntax.
-- It must not try to enforce document integrity rules.
-- All stateful validation belongs to the command layer or the document model.
+### 理由
 
-### Future adjustment conditions
-If a later refactor introduces a richer command grammar or AST layer, the same separation remains valid.
+- 为类型分派提供唯一、明确的位置。
+- 隔离新增图形类型时的变化点。
+- 为后续插件式图形注册保留演化路径。
+
+### 实现约束
+
+- 通过统一工厂或等价入口创建对应的具体图形。
+- 工厂内部可以保留小型集中分派表。
+- 命令行创建和 SVG 读入复用同一映射：`Document.createShape()` 委托 `ShapeFactory.fromSvg()` 转换属性，再调用 `ShapeFactory.create()`。直接构造已知类型的结构分组，不属于另一套类型名称分派。
+- 工厂是允许按类型分支的局部例外，因为它是明确识别出的变化点。
+
+### 后续调整条件
+
+进入插件阶段后，可以把工厂替换或扩展为提供者/注册表机制，同时保留其余模型接口。
 
 ---
 
-## 7. Shape creation is centralized in a ShapeFactory
+## 8. 命令名称分发集中管理
 
-### Decision
-The mapping from type name to concrete shape implementation must be centralized.
+### 决策
 
-Examples of built-in types in Phase 1:
-- rect
-- circle
-- ellipse
-- line
-- text
-- g
+命令名到具体命令实现的映射集中在 `CommandRegistry` 或等价分发器中管理，例如创建、移动、删除、显示结构树、帮助、退出等命令。
 
-The project will not scatter type-to-class logic across CLI, command, and model code.
+### 理由
 
-### Reason
-- It creates a single explicit location for type dispatch.
-- It isolates the evolution point where new shape kinds are added.
-- It leaves a clear path toward plugin-based shape registration later.
+- 这是课程明确允许的命令分发位置。
+- 避免具体命令逻辑散落在各处。
+- 为后续命令扩展保留清晰的集中注册方式。
 
-### Implementation constraints
-- A single factory or equivalent factory entry point should create the appropriate concrete shape.
-- The project may still keep a small centralized dispatch table in that factory.
-- Both CLI create and SVG read use this mapping: `Document.createShape()` delegates to `ShapeFactory.fromSvg()`, which converts SVG attributes and calls `ShapeFactory.create()`. Direct construction of a known structural Group does not introduce another type-name dispatch.
-- This is an accepted local exception to the general rule against type-based branching because it is a clearly identified change point.
+### 实现约束
 
-### Future adjustment conditions
-When plugin support is added, this factory can be replaced or extended by a provider/registry mechanism without altering the rest of the model interface.
+- 注册表是唯一负责“命令名到处理对象”映射的位置。
+- 业务逻辑放在具体命令类中，不写进分发器主体。
+
+### 后续调整条件
+
+随着命令增多，可以演化为更丰富的命令表或提供者注册表，但分发必须始终集中、明确。
 
 ---
 
-## 8. Command name dispatch is centralized
+## 9. 输入输出与核心模型分离
 
-### Decision
-The mapping from command name string to the concrete command implementation should be centralized in the CLI command registry or equivalent dispatcher.
+### 决策
 
-Examples:
-- create
-- move
-- delete
-- tree
-- help
-- exit
+SVG 文档模型不直接依赖终端输入输出、文件系统细节或 Node.js 命令行运行环境。
 
-### Reason
-- This is the approved command-dispatch location and is explicitly allowed by the course.
-- It avoids command logic being embedded throughout the codebase.
-- It creates a simple and extension-friendly command registration pattern.
+输入输出职责隔离在控制台输入、控制台输出、文件读写适配及文件序列化相关边界中。
 
-### Implementation constraints
-- The registry is the only place that maps command names to handler objects.
-- The actual command logic remains inside command classes, not in the dispatcher body.
+### 理由
 
-### Future adjustment conditions
-The registry can evolve into a richer command table or provider registry as the CLI grows, as long as the dispatch remains centralized and explicit.
+- 保持模型独立、可测试。
+- 防止命令行交互细节进入业务模型。
+- 便于后续隔离文件读写和解析工作。
+
+### 实现约束
+
+- 模型负责文档行为，不负责终端交互。
+- 命令行可以调用命令和模型对象，模型不能反向调用命令行代码。
+
+### 后续调整条件
+
+后续可以细化输入输出边界，但技术适配器位于边界、核心模型保持独立的原则不变。
 
 ---
 
-## 9. I/O and the core model are separated
+## 10. 不为假设需求过度设计
 
-### Decision
-The SVG document model does not directly depend on terminal I/O, file-system details, or the Node CLI runtime.
+### 决策
 
-I/O concerns are isolated in modules such as:
-- console input
-- console output
-- read/write adapters
-- file-based serialization logic
+虽然课程后续涉及插件和复合图形，当前仍不为尚未出现的需求建设大型基础设施。
 
-### Reason
-- This keeps the model independent and testable.
-- It prevents CLI concerns from polluting the business logic.
-- It makes future read/save and parser work easier to isolate.
+本阶段不引入：
 
-### Implementation constraints
-- The model is responsible for document behavior, not terminal interaction.
-- The CLI may call into commands and model objects, but the model will not reach back into CLI-specific code.
+- 完整插件管理器。
+- 依赖注入容器。
+- 服务定位框架。
+- 事件总线。
+- 大范围仓储抽象。
+- 尚无真实需求的通用运行时注册表。
 
-### Future adjustment conditions
-This split can become more elaborate in later phases, but we maintain the same principle: technical adapters sit at the boundary, not inside the model.
+### 理由
 
----
+- 第一阶段需要建立正确、可扩展的基础结构。
+- 过早增加框架会提高复杂度，却没有解决当前问题。
+- 课程要求结构清晰、演化路径稳定，而非提前实现通用框架。
 
-## 10. No speculative over-engineering
+### 实现约束
 
-### Decision
-Although the course points toward future plugin and composite capabilities, the project will not build large infrastructure for hypothetical features before they are needed.
+- 只在图形创建、命令分发和树结构操作等真实变化点留下小而明确的扩展边界。
+- 不在缺少具体需求的位置添加重型基础设施。
 
-The current project will not introduce:
-- a full plugin manager
-- dependency injection container
-- service locator framework
-- event bus
-- broad repository abstraction
-- generalized runtime registry before the project genuinely needs it
+### 后续调整条件
 
-### Reason
-- The goal of Phase 1 is to establish a correct and extendable skeleton.
-- Early over-engineering increases complexity without solving an immediate problem.
-- The course specifically expects a clean structure and a stable path for future extension, not a premature framework.
-
-### Implementation constraints
-- The project should deliberately leave narrow extension points at real change points such as shape creation, command dispatch, and tree structure handling.
-- It must not add heavy infrastructure where no concrete requirement exists yet.
-
-### Future adjustment conditions
-When the project actually reaches the plugin phase or a real performance issue, those infrastructure choices can be introduced with evidence and a documented rationale.
+真正进入插件阶段，或发现真实性能问题后，再根据证据和明确理由引入相应机制。
 
 ---
 
-## 11. Project-level working rule
+## 11. 项目工作规则
 
-This project is expected to evolve in small, verifiable increments. Each increment must remain consistent with the requirements from [phase_cli_1.md](phase_cli_1.md) and with the decisions above.
+项目按小步、可验证的方式演化。每次增量都必须符合[课程要求](../phase_cli_1.md)及本文决策。
 
-When a new feature is introduced, we will:
-1. check the course requirement,
-2. check this design document,
-3. build the smallest valid implementation,
-4. verify it with the relevant checks,
-5. record the work in [WORKLOG.md](WORKLOG.md).
+新增功能时依次进行：
+
+1. 核对课程要求。
+2. 核对设计决策。
+3. 实现最小可行方案。
+4. 执行相关验证。
+5. 在[开发记录](WORKLOG.md)中记录真实过程。
 
 ---
 
-## 12. Historical corrections and remaining design boundaries
+## 12. 历史修正与剩余设计边界
 
-The early skeleton contained a Map-based document index. That historical tension is resolved: Document delegates id lookup to the SVG tree and maintains no second authoritative id index. Earlier WORKLOG entries describe their state at the time and remain intact.
+早期基础框架曾包含基于 `Map` 的文档索引。该历史偏差已解决：`Document` 通过 SVG 树查找标识符，不再维护第二份权威索引。开发记录中的早期条目描述当时状态，继续保留。
 
-The 2026-10-20 audit also corrected a second shape-creation dispatch in Document and moved recursive move/scale behavior from commands into polymorphic Shape/Group operations. Group validation and stable Set history were verified with failing tests before fixes; related addto/ungroup structure errors were likewise reproduced and corrected.
+2026-10-20 的审计还修正了文档模型中的第二套图形创建分派，并把递归移动/缩放从命令层下移到多态图形操作。分组预验证和属性设置历史问题均先由失败测试确认，再修复；相关的移入容器、解组结构问题也经过复现和修正。
 
-Remaining boundaries are explicit rather than claimed to be fully solved:
+仍需明确保留以下边界：
 
-- `Document.serializeShape()` and `SetCommand` still contain concrete-type knowledge, and leaf geometry is public. Future providers would need to address those points; factory centralization alone does not complete plugin support or full encapsulation.
-- `CommandContext` depends on `ConsoleOutput`; a GUI/Agent needs an output adapter or narrower output interface.
-- The handwritten SVG parser supports a limited subset. Built-in round-trip checks are not proof of full XML/SVG compatibility.
+- `Document.serializeShape()` 和 `SetCommand` 仍包含具体类型知识，叶子图形的几何字段仍公开。后续图形提供者需要处理这些问题；创建分派集中化不等于已经完成插件化或全面封装。
+- `CommandContext` 仍依赖 `ConsoleOutput`；图形界面或智能体通道需要输出适配器或更小的输出接口。
+- 手写 SVG 解析器仅支持有限子集。内置图形的序列化往返测试不能证明完整 XML/SVG 兼容性。
 
-These points are recorded for later evidence-driven evolution. This pass does not add a plugin manager, general property framework, or unrelated broad refactor.
+以上边界用于指导后续基于证据的演化。本次不增加插件管理器、通用属性框架或无关的大范围重构。

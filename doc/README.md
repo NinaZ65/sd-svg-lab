@@ -1,18 +1,18 @@
-# Architecture and Phase 1 Summary
+# 软件设计lab1-phase1
 
 ## 1. 模块划分
 
-The project is organized into a compact layered structure that keeps the CLI, command logic, document model, and terminal I/O separated.
+本项目按职责划分为命令行交互、命令、文档模型、历史管理和输入输出适配等模块。这样做的主要目的是把终端交互和核心 SVG 编辑逻辑分开，避免所有功能都集中在一个类中。
 
 ```plantuml
 @startuml
-package "cli" {
+package "命令行交互" as cli {
   [CliApp]
   [ReplLoop]
   [CommandRegistry]
 }
 
-package "commands" {
+package "命令" as commands {
   [Command]
   [CommandContext]
   [AbstractCommand]
@@ -24,11 +24,12 @@ package "commands" {
   [SaveCommand]
 }
 
-package "model" {
+package "文档模型" as model {
   [Document]
   [Shape]
   [SvgCanvas]
-  package "shapes" {
+
+  package "图形实现与工厂" as shapes {
     [RectShape]
     [CircleShape]
     [EllipseShape]
@@ -39,12 +40,12 @@ package "model" {
   }
 }
 
-package "history" {
+package "历史管理" as history {
   [HistoryManager]
   [HistoryAction]
 }
 
-package "io" {
+package "输入输出适配" as io {
   [ConsoleInput]
   [ConsoleOutput]
 }
@@ -52,129 +53,288 @@ package "io" {
 CliApp --> ReplLoop
 ReplLoop --> CommandRegistry
 CommandRegistry --> Command
+
 AbstractCommand ..|> Command
 Command --> CommandContext
 AbstractCommand --> CommandContext
+
 CommandContext --> Document
 CommandContext --> HistoryManager
 CommandContext --> ConsoleOutput
+
 Document --> Shape
 Document --> SvgCanvas
 Document --> ShapeFactory
+
 CreateCommand --> ShapeFactory
 MoveCommand --> Shape
+
 HistoryManager --> HistoryAction
 CommandContext --> HistoryAction
+
 Shape <|-- GroupShape
 Shape <|-- RectShape
 Shape <|-- CircleShape
 Shape <|-- EllipseShape
 Shape <|-- LineShape
 Shape <|-- TextShape
+
 ShapeFactory --> Shape
 GroupShape --> Shape
 @enduml
 ```
 
-- `src/cli`: terminal interaction, REPL, and command dispatch.
-- `src/commands`: command objects for create / move / set / delete / group / read / save / undo / redo.
-- `src/model`: core SVG document state, tree-based shape lookup, canvas sizing, and serialization.
-- `src/model/shapes`: concrete SVG primitives and the centralized factory.
-- `src/history`: undo/redo stack for reversible edits.
-- `src/io`: console adapters that isolate terminal code.
-- `doc`: design decisions and process records.
-- `test`: real CLI acceptance, tree-model checks, command state regressions, and Composite/factory tests.
+各目录的职责如下：
 
-The diagram shows representative dependencies. The CLI assembles the document, history, and output into a `CommandContext`; commands validate and apply edits through the model. Read/write filesystem calls currently live in `ReadCommand` / `SaveCommand`, while `src/io` supplies console adapters. No terminal or filesystem API is imported by the model.
+- `src/cli`：负责终端交互、REPL 循环和命令分发。
+- `src/commands`：实现创建、移动、缩放、属性修改、删除、分组、文件读写、撤销和重做等命令。
+- `src/model`：维护 SVG 文档状态、画布信息、图形树和序列化逻辑。
+- `src/model/shapes`：实现具体图形类以及图形工厂。
+- `src/history`：维护撤销栈和重做栈。
+- `src/io`：封装控制台输入输出。
+- `doc`：保存项目报告、设计决策和开发记录。
+- `test`：保存模型测试、命令状态测试和 CLI 验收测试。
+
+整体依赖方向可以概括为：
+
+```text
+CLI
+ ↓
+Command
+ ↓
+Model
+
+History ← Command
+IO      ← Command / CLI
+```
+
+命令行层负责组装 `Document`、`HistoryManager` 和输出通道，并把它们放入 `CommandContext`。具体命令负责参数验证和编辑流程，真正的文档和图形状态由 Model 管理。
+
+文件读写目前由 `ReadCommand` 和 `SaveCommand` 调用文件系统完成，`src/io` 主要负责控制台适配。Model 不依赖 CLI、终端或文件系统。
+
+---
 
 ## 2. 设计模式的选择
 
-### Command Pattern
-Each executable action is implemented as a class with the same command interface and is registered centrally in `CommandRegistry` instead of using a monolithic `switch` in the REPL.
+### 2.1 Command 模式
 
-Commands record `HistoryAction` closures containing stable reverse information. `SetCommand` captures old/new values once; structural edits retain parent/index; transforms retain local geometry through `captureGeometry()` so undo restores exact floating point values. History does not copy the entire document or import concrete command classes.
+本项目要求支持 `undo/redo`，因此编辑操作采用 Command 模式比较自然。
 
-### Composite Pattern
-`Shape` and `GroupShape` form the composite structure for SVG. Container nodes and leaf nodes share a single abstraction, which lets operations such as move, delete, and scale work on nested trees as a uniform model.
+每个操作都实现统一的命令接口，并集中注册到 `CommandRegistry`。这样 REPL 只负责根据命令名找到对应 Command，而不会直接包含大量具体编辑逻辑。
 
-`MoveCommand` / `ScaleCommand` call `Shape.move()` / `Shape.scale()` without checking concrete types. Each leaf updates its own geometry, and `GroupShape` recursively delegates to children. Delete detaches a whole subtree through its parent.
+撤销和重做通过 `HistoryAction` 保存操作需要恢复的信息。例如：
 
-### Factory Pattern
-`ShapeFactory.create()` centralizes the type-name-to-class mapping. SVG reading delegates to `ShapeFactory.fromSvg()`, which converts attributes to the same creation entry point. Document no longer maintains a second type-to-class dispatch. Known-type construction of the document root and structural groups does not perform name dispatch.
+- `set` 保存修改前后的属性值；
+- 结构编辑保存原父节点和原同级位置；
+- 移动和缩放保存局部几何状态。
+
+这样做比每次复制整个 SVG 文档更轻量，也能让每个命令自己负责如何撤销自己的修改。
+
+### 2.2 Composite 模式
+
+SVG 本身就是树形结构，`<g>` 可以包含其他图形，因此项目中把 `GroupShape` 也设计成一种 `Shape`。
+
+```text
+Shape
+├── RectShape
+├── CircleShape
+├── EllipseShape
+├── LineShape
+├── TextShape
+└── GroupShape
+    └── Shape[]
+```
+
+`MoveCommand` 和 `ScaleCommand` 只调用统一的：
+
+```ts
+shape.move(...)
+shape.scale(...)
+```
+
+叶子图形修改自己的几何属性，而 `GroupShape` 负责递归对子节点执行操作。
+
+这样调用方不需要到处判断“当前目标到底是普通图形还是 Group”，也更符合 Composite 模式的设计目的。
+
+### 2.3 Factory 模式
+
+图形创建集中在 `ShapeFactory` 中。
+
+`ShapeFactory.create()` 负责从类型名创建对应图形，SVG 读入时也通过 `ShapeFactory.fromSvg()` 转换属性并复用创建逻辑。
+
+这样可以避免 `rect / circle / line ...` 的类型分派散落在 CLI、Command 和 Document 中。
+
+---
 
 ## 3. 依赖方向规则
 
-- `cli` may depend on `commands`, `model`, `history`, and `io` to assemble and run the application.
-- `commands` may depend on `model`, `history`, and `io`.
-- `model` must not depend on `cli`, `commands`, terminal IO, or the filesystem.
-- `history` owns stacks of `HistoryAction` callbacks and does not import the CLI or concrete commands.
-- `io` is a technical adapter and should not own business logic; read/save commands currently access `node:fs` at the application boundary.
+项目中约定以下依赖方向：
 
-This direction keeps geometry and document state testable without starting a terminal. Commands own validation and edit orchestration; input channels can reuse them. `CommandContext` still depends on `ConsoleOutput`, so reuse by a GUI/Agent would require an output adapter or a narrower output interface.
+- CLI 可以依赖 Command、Model、History 和 IO。
+- Command 可以依赖 Model、History 和 IO。
+- Model 不依赖 CLI、Command、控制台或文件系统。
+- History 只管理 `HistoryAction`，不依赖具体 Command。
+- IO 只负责技术层面的输入输出，不包含业务逻辑。
+
+这样做的好处是，核心图形和文档逻辑不需要启动终端就可以测试，也方便以后替换交互方式。
+
+目前仍有一个明确的边界：`CommandContext` 直接依赖 `ConsoleOutput`。如果后续真的增加 GUI 或 Agent 输入通道，可以再把输出进一步抽象成更通用的接口。Phase 1 暂时不提前做这一层扩展。
+
+---
 
 ## 4. 变化点假设：第三次迭代与风险识别
 
-| 未来变化 | 当前留下的边界 / 后续演化 | 风险与暂不实现的内容 |
-|---|---|---|
-| 新 Shape，例如后续 `box` | `ShapeFactory` 集中创建分派及 SVG 属性转换；`Shape.move/scale` 为多态操作。需求出现后再演化为 ShapeProvider / Registry。 | 创建、解析、序列化、变换的类型知识可能分散。目前序列化与 `set` 仍有类型判断；`box` 的子部件 id、属性传播、`data-kind` 读回也需设计。Phase 1 不实现插件管理器或 `box`，不能声称新增插件已能零改内核。 |
-| 新 Command | `CommandRegistry` 已有集中注册及 `register()`；后续可开放给命令 Provider，完善参数描述。 | parser、help、command implementation 需要同步；只注册处理器不能保证语法与帮助自动更新。目前不引入通用 AST 或插件框架。 |
-| 文档规模增大 | 当前 `findById()` 遍历唯一权威 SVG 树；真实性能测试证明瓶颈后，再考虑辅助 id index。 | 索引必须与 create/delete/group/ungroup/read/undo/redo 保持一致，不能成为第二份权威状态。现在不为尚未测出的性能问题维护缓存。 |
-| CLI → GUI / Agent | Model 和 Command 不依赖 `src/cli`；新通道可直接复用核心命令和模型。 | `CommandContext` 仍绑定 `ConsoleOutput`，命令参数还是字符串数组；未来需适配输出及输入参数，当前不提前建立多通道框架。 |
-| 更严格的 SVG round-trip | `Document.serializeSvg/deserializeSvg` 管理文档转换，类型创建委托工厂。 | 当前自写解析器只支持有限 SVG 子集，XML 转义、属性保真及第三方 SVG 兼容性需专门验证；六种内置类型测试不能替代完整 XML 一致性测试。 |
-| 更复杂的编辑历史 | 命令保存稳定 old/new、parent/index 或局部几何恢复闭包。 | 多节点修改须完整预验证，恢复顺序及浮点精度都可能出错；不引入全文档快照框架，以具体失败测试驱动改进。 |
+如果项目继续演化，我认为下面几处最可能发生变化。
 
-命令名分发和图形类型分发是当前明确保留、未来可演化的两个集中分派点；不为第三次迭代提前实现 Registry 插件基础设施。
+| 未来变化 | 当前设计与后续演化 | 风险 |
+|---|---|---|
+| 新增图形，例如 `box` | 当前用 `ShapeFactory` 集中处理图形创建；后续可以演化成 Provider / Registry 注册机制。 | 创建、解析、序列化和属性设置中仍存在一定的类型知识。`box` 还涉及内部 rect/text、属性传播和 `data-kind` 读回，Phase 1 暂时不实现完整插件系统。 |
+| 新增命令 | `CommandRegistry` 已集中管理命令注册，后续可以开放给新的命令提供者。 | Parser、help 信息和 Command 实现可能出现不同步，需要进一步统一命令描述。 |
+| 文档规模变大 | 当前 `findById()` 直接遍历 SVG 树。如果后续性能测试发现查找成为瓶颈，再考虑增加辅助 id 索引。 | 索引必须和 create/delete/group/read/undo/redo 始终保持一致，否则会再次出现两份状态不一致的问题。 |
+| CLI 演化为 GUI 或 Agent | Model 和 Command 不依赖 CLI，因此新的交互通道可以复用核心逻辑。 | `CommandContext` 仍绑定控制台输出，命令参数目前也是字符串数组，未来需要进一步适配。 |
+| SVG 兼容性要求提高 | 当前读写逻辑集中在 `Document` 和 `ShapeFactory`。 | 当前解析器只覆盖本实验需要的 SVG 子集，完整 XML 转义、更多属性和第三方 SVG 兼容性仍需要额外处理。 |
+| 更复杂的编辑历史 | 当前 Command 保存旧值、父节点、位置或局部几何状态。 | 多节点操作的恢复顺序和浮点值恢复容易出错，需要继续通过具体测试完善，而不是直接改成整份 Document 快照。 |
+
+当前保留的两个集中分派点是：
+
+- 命令名 → Command
+- 图形类型名 → Shape
+
+Phase 1 不提前实现完整插件框架，等后续需求真正出现后再扩展。
+
+---
 
 ## 5. 过程记录
 
-The most important architectural correction in this phase was the shift from the earlier Map-based lookup idea to the final tree-first model. At one point, the document model carried a convenience lookup structure alongside the recursive tree, which created a second source of truth: the in-memory model could be traversed through the SVG tree, but a separate map introduced a hidden risk of drift and inconsistency. We explicitly treated that as a design tension rather than silently accepting it. The final decision was to make the SVG tree the authoritative state and keep `findById()` as a tree traversal helper rather than a parallel index. This made child/parent relationships, nested group operations, and move/scale semantics consistent with the actual DOM-like structure of SVG.
+### 5.1 从 Map 索引改为以 SVG 树为实际状态来源
 
-The process also included a concrete Git verification correction. At one point, the AI relied on a single `git push` terminal output and concluded that the complete Phase 1 implementation had been synchronized to GitHub. A human check of the remote then showed that the remote still only had the older skeleton history. We subsequently re-verified with `git rev-parse HEAD`, `git rev-parse origin/main`, `git status`, and `git log`, and also inspected the real file contents. The result was clear: the full Phase 1 implementation was still only present as working-tree modifications and had not entered any commit. That corrected the earlier conclusion and established the rule that Git status is judged using the combined evidence of commit state, remote-tracking refs, and the working tree, rather than a single terminal output alone.
+项目早期曾在 SVG 树之外再维护一个 `Map<string, Shape>`，用于快速通过 id 查找图形。
 
-### 自动测试绿，但最终人工 CLI 发现 parent 错误
+在后续检查中，我发现这样会带来一个问题：SVG 树和 Map 都需要在 create、delete、group、read、undo 等操作中同时更新，一旦漏掉一个地方，就可能出现状态不一致。
 
-此前完整测试通过后，人工执行 `create g flowchart → create rect r1 ... in flowchart → show r1`，发现 parent 仍显示 root。随后修正 `CreateCommand` 的实际插入位置，并在 `test/phase1-validation.ts` 增加 rect/text 的 `in` 场景和 `parent=g#flowchart` 断言（提交 `a0105ab`）。修复后通过 `npm test` 和真实 CLI 再验收。本次也重新执行该 CLI 场景确认归属正确。这个案例说明：已有测试全部通过，只能证明已覆盖的断言通过，不能替代最终交互验收。
+因此后来决定只保留 SVG 树作为实际文档状态，`findById()` 直接从树中递归查找。
 
-### 最终审计发现 group 和 redo 状态错误
+Phase 1 的图形数量并不大，所以这里优先选择实现简单和状态一致性，而不是提前优化查询性能。
 
-2026-10-20 的源码审计发现两处违反设计决策的实现：`group bad r1 missing` 会先摘除 r1 再报错；`set r1 x 5 → undo → redo` 会因 setter 覆盖闭包数据而回到旧值。先添加测试并确认失败，再修复：group 完整预验证后才修改树，undo 按原 sibling index 恢复；set 固定捕获 old/new，恢复操作不改历史载荷。多次 undo/redo、跨父节点恢复及失败后树不变均有回归断言。
+### 5.2 Git push 状态误判
 
-定向审查还用失败测试确认并修正了 addto 的同父节点 redo 重复插入与环检测、ungroup 的位置恢复与根级限制。随后才集中创建分派、下移 Composite 变换，并补六种图形的 round-trip 测试；该测试额外发现并修复属性名解析漏读 `x1/y1/x2/y2`。过程依据是可复现的失败及修复后的验证，未改写旧提交历史。详细证据见 [WORKLOG.md](WORKLOG.md)。
+开发过程中曾出现一次 Git 状态判断错误。
+
+AI 根据一次 `git push` 的终端输出判断完整实现已经同步到 GitHub，但我实际打开远端仓库后发现，GitHub 上仍然只有早期的项目骨架。
+
+之后重新检查了：
+
+```text
+HEAD
+origin/main
+git status
+git log
+working tree
+```
+
+最后发现完整实现其实还没有 commit，只存在于本地工作区中。
+
+这个问题让我意识到，不能只依赖 AI 对某一次终端输出的解释。之后判断 Git 是否真正同步时，会同时检查本地提交、远端跟踪分支和工作区状态。
+
+### 5.3 自动测试通过，但人工 CLI 验收发现 parent 错误
+
+在一次完整自动测试通过后，我又手动执行了：
+
+```text
+create g flowchart
+create rect r1 ... in flowchart
+show r1
+```
+
+结果发现 `r1` 的 parent 仍然显示为根节点，而不是 `flowchart`。
+
+说明当时虽然测试通过，但实际上没有覆盖到这个具体的交互场景。
+
+随后修正了 `CreateCommand` 的插入位置，并增加了 `create ... in <container>` 的回归测试，再重新运行自动测试和真实 CLI 验收。
+
+这个问题也说明，自动测试只能证明已有测试覆盖到的行为正确，最终实际运行仍然有必要。
+
+### 5.4 最终检查发现 group 和 redo 问题
+
+后续检查中又发现了两个问题：
+
+1. `group bad r1 missing` 在发现目标不存在之前已经把 `r1` 从原位置摘掉，导致命令虽然报错，但文档状态已经变化。
+2. `set r1 x 5 → undo → redo` 后没有重新恢复成 `x=5`，说明撤销过程中修改了重做仍然需要的数据。
+
+这两个问题都先补充了能够稳定复现失败的测试，再修改实现。
+
+最终：
+
+- `group` 改为先完成全部验证，再修改树结构；
+- `set` 固定保存修改前后的值，undo 和 redo 不再互相覆盖数据。
+
+进一步检查时还发现并修正了 `addto`、`ungroup` 的位置恢复，以及部分 SVG 属性解析问题。
+
+这些修改都保留在 Git 提交历史中，详细过程见 `WORKLOG.md`。
+
+---
 
 ## 6. 一致性自查
 
-2026-10-20 人工检查实际目录、import 和关键方法，而非仅判断目录名称相符：
+实现完成后，我重新检查了实际目录、import 关系和关键实现，确认当前代码与架构方案基本一致。
 
-| 抽查项 | 实际代码及结论 |
+| 抽查项 | 结果 |
 |---|---|
-| 模块职责 | `src/cli` 负责交互/分发，`src/commands` 编排编辑，`src/model` 管理文档与图形，`src/history` 管理历史，`src/io` 适配控制台。文件读写目前在 Read/SaveCommand，已在上方图文说明。 |
-| Model 是否依赖 CLI | 检查 `src/model/**/*.ts` 的 import，无 CLI/Command/终端/`node:fs` 依赖。 |
-| Command 是否依赖 Model | `CommandContext` 导入 Document；Create/Move/Scale 等通过文档定位并操作 Shape。Command 不导入 CLI。 |
-| Shape 创建分派 | 发现并移除了 Document 中的第二套类型创建分派；`Document.createShape()` 现在委托 `ShapeFactory.fromSvg()`，最终复用 `create()` 的类映射。 |
-| 命令分发 | `CommandRegistry` 集中维护命令名到 Command 的映射；REPL 不执行具体编辑业务，分词也不查询文档状态。 |
-| 第二权威 Map | Document 只有 canvas/root/path 状态；`findById()` 委托 GroupShape 递归查找，没有全局 id → Shape 索引。命令注册 Map 及读入时临时 Set 不属于第二份模型。 |
-| Composite 是否真正使用多态 | 审计时 Move/ScaleCommand 原有类型判断及递归；现已改为 `target.move/scale()`，Group 递归 children，leaf 修改自身几何。`captureGeometry()` 也按该树结构保存局部恢复操作。 |
-| History 依赖 | HistoryManager 保存自身模块的 `HistoryAction` 回调，不导入具体 Command；命令负责提供稳定的撤销/重做闭包。 |
-| 失败不改变状态与位置恢复 | group 所有目标及祖先关系先验证，原 parent/index 在修改前记录；addto 先拒绝环；ungroup 在原位置提升 children。失败、精确 sibling order 及重复 undo/redo 已测试。 |
+| 模块职责 | `cli` 负责交互，`commands` 负责编辑流程，`model` 管理文档和图形，`history` 管理撤销重做，`io` 负责控制台适配。 |
+| Model 是否依赖 CLI | 检查 `src/model` 后，没有发现对 CLI、Command、控制台或 `node:fs` 的依赖。 |
+| Command 是否依赖 Model | Command 通过 `CommandContext` 获取 `Document`，并调用 Model 完成真正的编辑操作。 |
+| 图形创建分派 | 早期 Document 中曾存在第二套图形类型分派，后来已经统一交给 `ShapeFactory`。 |
+| 命令分发 | 命令名统一在 `CommandRegistry` 中注册，REPL 不直接执行具体业务逻辑。 |
+| id 查找 | 当前没有全局 `id → Shape` 权威 Map，`findById()` 直接遍历 SVG 树。 |
+| Composite | `MoveCommand` 和 `ScaleCommand` 不再判断具体图形类型，而是调用统一的 `Shape.move()` 和 `Shape.scale()`；Group 自己递归处理子节点。 |
+| History | `HistoryManager` 保存 `HistoryAction`，不依赖具体 Command。 |
+| 失败是否改变状态 | group、addto 等结构操作先完成验证，再修改树；撤销时恢复原父节点和原同级位置。 |
 
-已修正的偏差不能抹去原先问题：Map 历史张力、重复创建分派及命令层 Composite 变换均保留在过程记录中。仍存在的边界包括 `Document.serializeShape()` / `SetCommand` 的类型知识、公开几何字段及控制台输出耦合；本次没有扩展为全面封装或插件化重构。
+检查过程中也发现，早期实现并不完全符合最初设计，例如曾存在 Map 索引、重复的 Shape 创建分派，以及 Move/Scale 在命令层判断具体类型的问题。这些后来都进行了修正。
+
+当前仍保留一些 Phase 1 暂不继续抽象的地方，例如：
+
+- SVG 序列化和 `SetCommand` 中仍存在少量类型判断；
+- 部分几何字段仍直接暴露；
+- `CommandContext` 仍绑定控制台输出。
+
+这些属于后续迭代可以继续改进的边界，本阶段不再继续扩大重构范围。
+
+---
 
 ## 7. 质量保证手段
 
-统一入口为 `npm test`：先编译，再运行 CLI smoke、真实 CLI 功能验收，以及 `node --test dist/test/*.test.js`。原先未被执行的 `model-tree.test.ts` 已纳入；它只构造内存模型并断言，无外部副作用。
+项目统一使用：
 
-| 验证 | 实际覆盖 |
+```bash
+npm test
+```
+
+作为主要验证入口，包括 TypeScript 编译、CLI 冒烟测试、Phase 1 功能验收以及 Model / Command 的自动测试。
+
+主要覆盖可以分为四类：
+
+| 验证方式 | 主要内容 |
 |---|---|
-| TypeScript build | `npm run build`，strict 编译检查。 |
-| `cli-smoke.ts` | CLI banner、提示符及 `help/exit` 启动路径。 |
-| `phase1-validation.ts` | 真实 CLI 的 create-in parent、group move/scale、undo/redo、save 后 IO barrier、非法 scale、不支持的 set 属性、read 自动补 id 和警告。 |
-| `model-tree.test.ts` | 嵌套 group/leaf 查找及不存在的 id。 |
-| `group-state.test.ts` | 失败后 parent、sibling order、tree、SVG、history 不变；重复 id、祖先/后代、根节点拒绝；跨父节点精确撤销/重做。 |
-| `set-history.test.ts` | old/new 稳定、连续多次撤销重做、独立 set 历史、未设置样式的恢复、文本保持及非法数值拒绝。 |
-| `command-history.test.ts` | move/scale/delete/create/group/addto/front/back 的重复历史恢复，addto 防环与同父节点操作，ungroup 原位置提升及根级拒绝。 |
-| `shape-factory.test.ts` | 六种内置类型嵌套 SVG round-trip、缺省值、可选样式、自动 id、未知标签及 Phase 1 不支持 box。 |
-| `composite-transform.test.ts` | 通过统一 Shape 接口变换全部叶子类型与嵌套/空 Group；局部几何恢复、浮点值反复 undo/redo、无关 sibling 不变。 |
+| 编译与 CLI 冒烟测试 | TypeScript 编译、程序启动、提示符、`help` 和退出流程。 |
+| Phase 1 功能验收 | 创建、指定容器创建、group、move、scale、set、undo/redo、save/read、错误处理等真实 CLI 行为。 |
+| Model / Command 自动测试 | 树查找、失败不改变状态、父节点和同级位置恢复、Composite 行为、Factory 创建、序列化往返和历史恢复。 |
+| 人工 CLI 验收 | 实际执行典型操作，重点检查 Group 的整体移动、parent 归属、undo/redo、IO barrier 和保存后的 SVG。 |
 
-2026-10-20 修复后 `npm test` 通过：Node test runner 报告 32 项通过、0 失败，另有上述两个 CLI 脚本执行成功。各修复提交前后均运行 `npm test`。另经实际 CLI 进程复核 group 失败后两节点仍在、set 的 x 在 undo/redo 后为 0/5，以及 create-in 的 parent 为 flowchart。
+最终修复后：
 
-覆盖边界需如实说明：当前脚本没有分别断言 read/init/canvas 后的 IO barrier，也不是完整 XML 或全部 Phase 1 边界条件的穷举证明。保留真实人工 CLI 验收，并根据新发现增加回归测试；不再把“测试绿”直接表述为所有行为已获证明。
+```text
+Node.js 自动测试：32 项通过，0 失败
+CLI 测试脚本：执行成功
+```
+
+另外，开发过程中发现的 bug 都尽量补充了回归测试。例如：
+
+- `create ... in` 的 parent 错误；
+- group 失败后状态被部分修改；
+- set 的 redo 状态错误；
+- addto / ungroup 的结构恢复问题。
+
+需要说明的是，现有测试并不是对所有 SVG 或所有边界情况的完整证明。例如当前 SVG parser 只覆盖 Phase 1 需要的子集，IO barrier 也没有穷举所有组合。
+
+因此本项目仍保留人工 CLI 验收，并在实际发现新问题后补充对应的回归测试，而不是简单把“测试通过”理解为所有行为都已经完全正确。
