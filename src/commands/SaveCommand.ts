@@ -12,7 +12,7 @@ export class SaveCommand extends AbstractCommand {
     try {
       writeFileSync(filePath, context.document.serializeSvg(), 'utf8');
       context.document.setLastPath(filePath);
-      context.markIoCommand();
+      context.markIoCommand(true);
       context.output.writeLine(`saved to ${filePath}`);
     } catch (_error) {
       context.output.error(`cannot write file: ${filePath}`);

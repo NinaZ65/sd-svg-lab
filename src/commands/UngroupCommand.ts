@@ -23,6 +23,11 @@ export class UngroupCommand extends AbstractCommand {
       return;
     }
 
+    if (group.getKind() !== 'g') {
+      context.output.error(`cannot ungroup composite shape: ${group.id}`);
+      return;
+    }
+
     const parent = group.getParent();
     if (!parent || parent === context.document.getRoot()) {
       context.output.error(`cannot ungroup top-level container: ${group.id}`);

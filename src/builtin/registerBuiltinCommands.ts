@@ -1,0 +1,44 @@
+import { CommandRegistry } from '../cli/CommandRegistry';
+import { AddtoCommand } from '../commands/AddtoCommand';
+import { BackCommand } from '../commands/BackCommand';
+import { CanvasCommand } from '../commands/CanvasCommand';
+import { CreateCommand } from '../commands/CreateCommand';
+import { DeleteCommand } from '../commands/DeleteCommand';
+import { ExitCommand } from '../commands/ExitCommand';
+import { FrontCommand } from '../commands/FrontCommand';
+import { GroupCommand } from '../commands/GroupCommand';
+import { HelpCommand } from '../commands/HelpCommand';
+import { InitCommand } from '../commands/InitCommand';
+import { MoveCommand } from '../commands/MoveCommand';
+import { ReadCommand } from '../commands/ReadCommand';
+import { RedoCommand } from '../commands/RedoCommand';
+import { SaveCommand } from '../commands/SaveCommand';
+import { ScaleCommand } from '../commands/ScaleCommand';
+import { SetCommand } from '../commands/SetCommand';
+import { ShowCommand } from '../commands/ShowCommand';
+import { TreeCommand } from '../commands/TreeCommand';
+import { UndoCommand } from '../commands/UndoCommand';
+import { UngroupCommand } from '../commands/UngroupCommand';
+
+export function registerBuiltinCommands(registry: CommandRegistry): void {
+  registry.register(new HelpCommand());
+  registry.register(new ExitCommand());
+  registry.register(new InitCommand());
+  registry.register(new CanvasCommand());
+  registry.register(new TreeCommand());
+  registry.register(new ShowCommand());
+  registry.register(new CreateCommand());
+  registry.register(new MoveCommand());
+  registry.register(new SetCommand());
+  registry.register(new DeleteCommand());
+  registry.register(new GroupCommand());
+  registry.register(new UngroupCommand());
+  registry.register(new AddtoCommand());
+  registry.register(new FrontCommand());
+  registry.register(new BackCommand());
+  registry.register(new ScaleCommand());
+  registry.register(new ReadCommand());
+  registry.register(new SaveCommand());
+  registry.register(new UndoCommand());
+  registry.register(new RedoCommand());
+}

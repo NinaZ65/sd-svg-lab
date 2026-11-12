@@ -3,11 +3,25 @@ import { test } from 'node:test';
 import { Document } from '../src/model/Document';
 import { GroupShape } from '../src/model/shapes/GroupShape';
 import { RectShape } from '../src/model/shapes/RectShape';
-import { ShapeFactory } from '../src/model/shapes/ShapeFactory';
+import { ShapeRegistry } from '../src/core/ShapeRegistry';
+import { registerBuiltinShapes } from '../src/builtin/registerBuiltinShapes';
+
+function documentWithBuiltins(width = 800, height = 600): Document {
+  const shapes = new ShapeRegistry();
+  registerBuiltinShapes(shapes);
+  return new Document(width, height, shapes);
+}
+
+function builtinShapes(): ShapeRegistry {
+  const shapes = new ShapeRegistry();
+  registerBuiltinShapes(shapes);
+  return shapes;
+}
 
 test('SVG read and CLI factory produce the same six built-in shape kinds', () => {
-  const original = new Document(400, 300);
-  const group = ShapeFactory.create('g', 'container', []) as GroupShape;
+  const shapes = builtinShapes();
+  const original = new Document(400, 300, shapes);
+  const group = shapes.create('g', 'container', []) as GroupShape;
   original.getRoot().addChild(group);
   for (const [kind, id, args] of [
     ['rect', 'r', ['1', '2', '3', '4', 'red']],
@@ -17,10 +31,10 @@ test('SVG read and CLI factory produce the same six built-in shape kinds', () =>
     ['text', 't', ['16', '17', 'hello world']],
     ['g', 'nested', []],
   ] as const) {
-    group.addChild(ShapeFactory.create(kind, id, args));
+    group.addChild(shapes.create(kind, id, args));
   }
   const svg = original.serializeSvg();
-  const restored = new Document();
+  const restored = documentWithBuiltins();
   restored.deserializeSvg(svg);
   assert.equal(restored.serializeSvg(), svg);
   assert.deepEqual(restored.getRoot().renderTree(0), original.getRoot().renderTree(0));
@@ -30,7 +44,7 @@ test('SVG read and CLI factory produce the same six built-in shape kinds', () =>
 });
 
 test('SVG factory preserves defaults, optional styles, generated ids, and unsupported-tag behavior', () => {
-  const document = new Document();
+  const document = documentWithBuiltins();
   const warnings: string[] = [];
   document.deserializeSvg('<svg><path id="ignored"/><rect/><rect/><g id="nested"><text id="label"> hello world </text></g></svg>', message => warnings.push(message));
   const rect = document.findById('rect1') as RectShape;
@@ -40,6 +54,7 @@ test('SVG factory preserves defaults, optional styles, generated ids, and unsupp
   assert.equal(document.findById('label')?.getParent()?.id, 'nested');
   assert.equal(document.findById('ignored'), undefined);
   assert.deepEqual(warnings, ['assigned id rect1 to unnamed <rect>', 'assigned id rect2 to unnamed <rect>']);
-  assert.equal(ShapeFactory.fromSvg('constructor', 'unsupported', {}), undefined);
-  assert.throws(() => ShapeFactory.create('box', 'future', []), /unknown shape type: box/);
+  const shapes = builtinShapes();
+  assert.equal(shapes.read('constructor', 'unsupported', {}, '', []), undefined);
+  assert.throws(() => shapes.create('box', 'future', []), /unknown shape type: box/);
 });

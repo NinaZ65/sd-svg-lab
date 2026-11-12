@@ -30,6 +30,10 @@ export class AddtoCommand extends AbstractCommand {
       context.output.error(`cannot move root container: ${child.id}`);
       return;
     }
+    if (!parent.canRemoveChild(child)) {
+      context.output.error(`cannot remove required composite child: ${child.id}`);
+      return;
+    }
     for (let ancestor: GroupShape | null = group; ancestor; ancestor = ancestor.getParent()) {
       if (ancestor === child) {
         context.output.error(`cannot add a container into its own descendant: ${child.id}`);

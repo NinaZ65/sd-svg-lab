@@ -2,11 +2,14 @@ import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 import { Shape } from '../src/model/Shape';
 import { GroupShape } from '../src/model/shapes/GroupShape';
-import { ShapeFactory } from '../src/model/shapes/ShapeFactory';
+import { ShapeRegistry } from '../src/core/ShapeRegistry';
+import { registerBuiltinShapes } from '../src/builtin/registerBuiltinShapes';
 import { CommandHarness } from './CommandHarness';
 
 test('nested Composite transforms all leaf kinds through the Shape interface', () => {
   const outer = new GroupShape('outer');
+  const shapes = new ShapeRegistry();
+  registerBuiltinShapes(shapes);
   const inner = new GroupShape('inner');
   outer.addChild(inner);
   for (const [kind, id, args] of [
@@ -17,7 +20,7 @@ test('nested Composite transforms all leaf kinds through the Shape interface', (
     ['text', 't', ['16', '17', 'hello']],
     ['g', 'empty', []],
   ] as const) {
-    inner.addChild(ShapeFactory.create(kind, id, args));
+    inner.addChild(shapes.create(kind, id, args));
   }
   const target: Shape = outer;
   const before = target.renderTree(0);

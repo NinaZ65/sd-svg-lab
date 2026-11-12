@@ -37,6 +37,11 @@ export class GroupCommand extends AbstractCommand {
         return;
       }
 
+      if (!parent.canRemoveChild(shape)) {
+        context.output.error(`cannot remove required composite child: ${shape.id}`);
+        return;
+      }
+
       if (targets.has(shape)) {
         context.output.error(`duplicate shape id: ${id}`);
         return;

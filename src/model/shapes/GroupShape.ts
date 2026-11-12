@@ -3,7 +3,7 @@ import { Shape } from '../Shape';
 export class GroupShape extends Shape {
   private readonly children: Shape[];
 
-  public constructor(id: string) {
+  public constructor(id: string, private readonly dataKind?: string) {
     super(id);
     this.children = [];
   }
@@ -59,6 +59,17 @@ export class GroupShape extends Shape {
     return 'g';
   }
 
+  public canRemoveChild(_shape: Shape): boolean { return true; }
+
+  public serializeSvg(depth: number): string {
+    const indent = '  '.repeat(depth);
+    const kind = this.dataKind ? ` data-kind="${this.dataKind}"` : '';
+    const lines = [`${indent}<g id="${this.id}"${kind}>`];
+    for (const child of this.children) lines.push(child.serializeSvg(depth + 1));
+    lines.push(`${indent}</g>`);
+    return lines.join('\n');
+  }
+
   public move(dx: number, dy: number): void {
     for (const child of this.children) {
       child.move(dx, dy);
@@ -101,7 +112,7 @@ export class GroupShape extends Shape {
 
   public renderTree(depth: number): string[] {
     const indent = '  '.repeat(depth);
-    const lines = [`${indent}${this.getDisplayName()}`];
+    const lines = [`${indent}${this.getTreeDisplayName()}`];
 
     for (const child of this.children) {
       if (child instanceof GroupShape) {

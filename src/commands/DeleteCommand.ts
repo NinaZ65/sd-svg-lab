@@ -24,6 +24,11 @@ export class DeleteCommand extends AbstractCommand {
       return;
     }
 
+    if (!parent.canRemoveChild(target)) {
+      context.output.error(`cannot remove required composite child: ${target.id}`);
+      return;
+    }
+
     const index = parent.indexOf(target);
     parent.removeChild(target);
     context.recordAction({

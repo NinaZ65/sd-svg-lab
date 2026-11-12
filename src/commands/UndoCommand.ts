@@ -16,7 +16,7 @@ export class UndoCommand extends AbstractCommand {
       return;
     }
 
-    context.history.undo();
-    context.output.writeLine('undo executed');
+    const action = context.history.undo();
+    context.output.writeLine(action?.undoMessage ?? 'undo executed');
   }
 }

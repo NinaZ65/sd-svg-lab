@@ -15,7 +15,7 @@ export class InitCommand extends AbstractCommand {
     }
 
     context.document.initialize(width, height);
-    context.markIoCommand();
+    context.markIoCommand(true);
     context.output.writeLine(`canvas ${width}x${height} created`);
   }
 }

@@ -1,6 +1,8 @@
 export type HistoryAction = {
   undo: () => void;
   redo: () => void;
+  undoMessage?: string;
+  redoMessage?: string;
 };
 
 export class HistoryManager {
@@ -29,7 +31,7 @@ export class HistoryManager {
     return this.ioBarrierActive;
   }
 
-  public undo(): void {
+  public undo(): HistoryAction | undefined {
     if (this.ioBarrierActive) {
       throw new Error('undo not allowed after io command');
     }
@@ -41,9 +43,10 @@ export class HistoryManager {
 
     action.undo();
     this.redoStack.push(action);
+    return action;
   }
 
-  public redo(): void {
+  public redo(): HistoryAction | undefined {
     if (this.ioBarrierActive) {
       throw new Error('undo not allowed after io command');
     }
@@ -55,6 +58,7 @@ export class HistoryManager {
 
     action.redo();
     this.undoStack.push(action);
+    return action;
   }
 
   public canUndo(): boolean {

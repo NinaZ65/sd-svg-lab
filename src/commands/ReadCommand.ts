@@ -15,9 +15,11 @@ export class ReadCommand extends AbstractCommand {
 
     try {
       const content = readFileSync(filePath, 'utf8');
-      context.document.deserializeSvg(content, (message) => context.output.warning(message));
+      const warnings: string[] = [];
+      context.document.deserializeSvg(content, message => warnings.push(message));
       context.document.setLastPath(filePath);
-      context.markIoCommand();
+      context.markIoCommand(true);
+      for (const warning of warnings) context.output.warning(warning);
       context.output.writeLine(`read ${filePath}`);
     } catch (_error) {
       context.output.error(`cannot read file: ${filePath}`);

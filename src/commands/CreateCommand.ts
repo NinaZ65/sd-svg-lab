@@ -1,7 +1,6 @@
 import { AbstractCommand } from './AbstractCommand';
 import { CommandContext } from './CommandContext';
 import { GroupShape } from '../model/shapes/GroupShape';
-import { ShapeFactory } from '../model/shapes/ShapeFactory';
 
 export class CreateCommand extends AbstractCommand {
   public readonly name = 'create';
@@ -35,7 +34,7 @@ export class CreateCommand extends AbstractCommand {
     }
 
     try {
-      const shape = ShapeFactory.create(kind, id, payload);
+      const shape = context.document.makeShape(kind, id, payload);
       const parent = containerId ? context.document.findById(containerId) : context.document.getRoot();
 
       if (containerId && !parent) {

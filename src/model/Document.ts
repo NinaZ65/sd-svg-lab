@@ -1,14 +1,14 @@
 import { Shape } from './Shape';
 import { SvgCanvas } from './SvgCanvas';
 import { GroupShape } from './shapes/GroupShape';
-import { ShapeFactory } from './shapes/ShapeFactory';
+import { ShapeRegistry } from '../core/ShapeRegistry';
 
 export class Document {
   private canvas: SvgCanvas;
-  private readonly root: GroupShape;
+  private root: GroupShape;
   private lastPath: string | null;
 
-  public constructor(width = 800, height = 600) {
+  public constructor(width = 800, height = 600, private readonly shapes = new ShapeRegistry()) {
     this.canvas = new SvgCanvas(width, height);
     this.root = new GroupShape('root');
     this.lastPath = null;
@@ -44,6 +44,18 @@ export class Document {
     }
   }
 
+  public makeShape(kind: string, id: string, args: readonly (string | undefined)[]): Shape {
+    const shape = this.shapes.create(kind, id, args);
+    const newIds = new Set<string>();
+    const visit = (node: Shape): void => {
+      if (newIds.has(node.id) || this.hasShape(node.id)) throw new Error(`id already exists: ${node.id}`);
+      newIds.add(node.id);
+      if (node instanceof GroupShape) for (const child of node.getChildren()) visit(child);
+    };
+    visit(shape);
+    return shape;
+  }
+
   public setLastPath(path: string | null): void {
     this.lastPath = path;
   }
@@ -59,7 +71,7 @@ export class Document {
     ];
 
     for (const child of this.root.getChildren()) {
-      parts.push(this.serializeShape(child, 1));
+      parts.push(child.serializeSvg(1));
     }
 
     parts.push('</svg>');
@@ -81,59 +93,18 @@ export class Document {
     const svgAttrs = this.parseAttributes(svgMatch[0]);
     const width = Number(svgAttrs.width ?? this.canvas.getWidth());
     const height = Number(svgAttrs.height ?? this.canvas.getHeight());
-    this.canvas = new SvgCanvas(width, height);
-    this.root.clearChildren();
+    const nextCanvas = new SvgCanvas(width, height);
+    const nextRoot = new GroupShape('root');
 
     const seenIds = new Set<string>();
     const svgStart = svgMatch.index ?? 0;
     const svgEnd = closeMatch.index ?? 0;
     const innerMarkup = content.slice(svgStart + svgMatch[0].length, svgEnd);
     for (const child of this.parseChildren(innerMarkup, seenIds, onWarning)) {
-      this.root.addChild(child);
+      nextRoot.addChild(child);
     }
-  }
-
-  private serializeShape(shape: Shape, indentLevel: number): string {
-    const indent = '  '.repeat(indentLevel);
-    if (shape instanceof GroupShape) {
-      const lines = [`${indent}<g id="${shape.id}">`];
-      for (const child of shape.getChildren()) {
-        lines.push(this.serializeShape(child, indentLevel + 1));
-      }
-      lines.push(`${indent}</g>`);
-      return lines.join('\n');
-    }
-
-    if (shape.getKind() === 'rect') {
-      const rect = shape as unknown as { id: string; x: number; y: number; width: number; height: number; fill?: string };
-      const fill = rect.fill ? ` fill="${rect.fill}"` : '';
-      return `${indent}<rect id="${shape.id}" x="${rect.x}" y="${rect.y}" width="${rect.width}" height="${rect.height}"${fill}/>`;
-    }
-
-    if (shape.getKind() === 'circle') {
-      const circle = shape as unknown as { id: string; cx: number; cy: number; r: number; fill?: string };
-      const fill = circle.fill ? ` fill="${circle.fill}"` : '';
-      return `${indent}<circle id="${shape.id}" cx="${circle.cx}" cy="${circle.cy}" r="${circle.r}"${fill}/>`;
-    }
-
-    if (shape.getKind() === 'ellipse') {
-      const ellipse = shape as unknown as { id: string; cx: number; cy: number; rx: number; ry: number; fill?: string };
-      const fill = ellipse.fill ? ` fill="${ellipse.fill}"` : '';
-      return `${indent}<ellipse id="${ellipse.id}" cx="${ellipse.cx}" cy="${ellipse.cy}" rx="${ellipse.rx}" ry="${ellipse.ry}"${fill}/>`;
-    }
-
-    if (shape.getKind() === 'line') {
-      const line = shape as unknown as { id: string; x1: number; y1: number; x2: number; y2: number; stroke?: string };
-      const stroke = line.stroke ? ` stroke="${line.stroke}"` : '';
-      return `${indent}<line id="${shape.id}" x1="${line.x1}" y1="${line.y1}" x2="${line.x2}" y2="${line.y2}"${stroke}/>`;
-    }
-
-    if (shape.getKind() === 'text') {
-      const text = shape as unknown as { id: string; x: number; y: number; text: string };
-      return `${indent}<text id="${shape.id}" x="${text.x}" y="${text.y}">${text.text}</text>`;
-    }
-
-    return `${indent}<g id="${shape.id}"/>`;
+    this.canvas = nextCanvas;
+    this.root = nextRoot;
   }
 
   private parseChildren(markup: string, seenIds: Set<string>, onWarning?: (message: string) => void): Shape[] {
@@ -149,9 +120,15 @@ export class Document {
         break;
       }
 
+      if (markup[cursor] !== '<') {
+        const nextOpen = markup.indexOf('<', cursor);
+        if (nextOpen < 0) break;
+        cursor = nextOpen;
+      }
+
       const nextTag = markup.slice(cursor).match(/^<\s*(\/)?\s*([A-Za-z0-9]+)\b([^>]*)>/);
       if (!nextTag) {
-        break;
+        throw new Error('invalid svg');
       }
 
       const isClosing = Boolean(nextTag[1]);
@@ -159,40 +136,20 @@ export class Document {
       const fullTag = nextTag[0];
 
       if (isClosing) {
-        break;
+        throw new Error('invalid svg');
       }
 
       const attrs = this.parseAttributes(fullTag);
+      const id = this.reserveId(tagName, attrs, seenIds, onWarning);
       const selfClosing = /\/\s*>$/.test(fullTag);
       const tagStart = cursor + nextTag[0].length;
-
-      if (selfClosing) {
-        const shape = this.createShape(tagName, attrs, seenIds, onWarning);
-        if (shape) {
-          children.push(shape);
-        }
-        cursor = tagStart;
-        continue;
-      }
-
-      const closeIndex = this.findClosingTag(markup, tagStart, tagName);
-      if (closeIndex < 0) {
-        break;
-      }
-
-      const innerMarkup = markup.slice(tagStart, closeIndex);
-      const group = this.createShape(tagName, attrs, seenIds, onWarning, innerMarkup);
-
-      if (group instanceof GroupShape) {
-        for (const child of this.parseChildren(innerMarkup, seenIds, onWarning)) {
-          group.addChild(child);
-        }
-        children.push(group);
-      } else if (group) {
-        children.push(group);
-      }
-
-      cursor = closeIndex + `</${tagName}>`.length;
+      const closeIndex = selfClosing ? tagStart : this.findClosingTag(markup, tagStart, tagName);
+      if (closeIndex < 0) throw new Error('invalid svg');
+      const innerMarkup = selfClosing ? '' : markup.slice(tagStart, closeIndex);
+      const nested = selfClosing ? [] : this.parseChildren(innerMarkup, seenIds, onWarning);
+      const shape = this.shapes.read(tagName, id, attrs, innerMarkup, nested);
+      if (shape) children.push(shape);
+      cursor = selfClosing ? tagStart : closeIndex + `</${tagName}>`.length;
     }
 
     return children;
@@ -217,7 +174,7 @@ export class Document {
         if (depth === 0) {
           return match.index;
         }
-      } else {
+      } else if (!/\/\s*>$/.test(match[0])) {
         depth += 1;
       }
     }
@@ -239,13 +196,12 @@ export class Document {
     return attributes;
   }
 
-  private createShape(
+  private reserveId(
     tagName: string,
     attributes: Record<string, string>,
     seenIds: Set<string>,
     onWarning?: (message: string) => void,
-    textContent = '',
-  ): Shape | undefined {
+  ): string {
     let id = attributes.id ?? undefined;
     if (!id) {
       let candidate = `${tagName}1`;
@@ -258,9 +214,9 @@ export class Document {
       seenIds.add(id);
       onWarning?.(`assigned id ${id} to unnamed <${tagName}>`);
     } else {
+      if (seenIds.has(id)) throw new Error(`id already exists: ${id}`);
       seenIds.add(id);
     }
-
-    return ShapeFactory.fromSvg(tagName, id, attributes, textContent);
+    return id;
   }
 }

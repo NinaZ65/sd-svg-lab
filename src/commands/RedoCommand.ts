@@ -16,7 +16,7 @@ export class RedoCommand extends AbstractCommand {
       return;
     }
 
-    context.history.redo();
-    context.output.writeLine('redo executed');
+    const action = context.history.redo();
+    context.output.writeLine(action?.redoMessage ?? 'redo executed');
   }
 }

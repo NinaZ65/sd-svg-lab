@@ -1,5 +1,7 @@
 import { AbstractCommand } from './AbstractCommand';
 import { CommandContext } from './CommandContext';
+import { Shape } from '../model/Shape';
+import { GroupShape } from '../model/shapes/GroupShape';
 
 export class TreeCommand extends AbstractCommand {
   public readonly name = 'tree';
@@ -11,7 +13,8 @@ export class TreeCommand extends AbstractCommand {
 
     if (args.length === 0) {
       const lines = [`svg (${canvas.toString()})`, ...root.renderTree(0)];
-      context.output.writeLine(lines.join('\n'));
+      const shapes: (Shape | null)[] = [null, ...this.flatten(root)];
+      context.output.writeLine(context.decorators.decorate(lines, shapes, context.document).join('\n'));
       return;
     }
 
@@ -21,7 +24,14 @@ export class TreeCommand extends AbstractCommand {
       return;
     }
 
-    const lines = [`${target.getDisplayName()}`, ...target.renderTree(1)];
-    context.output.writeLine(lines.join('\n'));
+    const lines = [`${target.getTreeDisplayName()}`, ...target.renderTree(1)];
+    const shapes = [target, ...this.flatten(target)];
+    context.output.writeLine(context.decorators.decorate(lines, shapes, context.document).join('\n'));
+  }
+
+  private flatten(shape: Shape): Shape[] {
+    return shape instanceof GroupShape
+      ? [shape, ...shape.getChildren().flatMap(child => this.flatten(child))]
+      : [shape];
   }
 }

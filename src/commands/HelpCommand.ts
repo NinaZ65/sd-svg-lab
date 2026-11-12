@@ -28,6 +28,7 @@ export class HelpCommand extends AbstractCommand {
       '  undo                    Undo the last edit',
       '  redo                    Redo the last undone edit',
       '  exit                    Exit the REPL',
+      ...context.availableCommands().filter(command => command.helpLine).map(command => command.helpLine as string),
       '',
       'Note: phase 1 includes the structural CLI and core SVG edit model.',
     ];
