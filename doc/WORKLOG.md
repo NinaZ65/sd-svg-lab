@@ -213,7 +213,7 @@ node --test dist/test/group-state.test.js dist/test/set-history.test.js
 
 尝试用独立配置启动 VSCode 开发窗口；当前执行环境没有可访问的图形显示，`screencapture` 在普通及提权执行下均返回 `could not create image from display`。因此界面观察和两张真实截图尚待图形桌面补证，不能以课程要求自带的示意图替代。
 
-用户随后在本机扩展开发窗口实际演示：Explorer 中 `example.svg` 带 `[]`，`notes.txt` 和 `sample-dir/` 无标记；源码编辑器的 Outline 展示 `svg → g#flow → rect#start`、无 id 的 `text`、`g#next → circle#point`。首次点击 `rect#start` 会切换到 SVG 图片预览，无法完成源码定位。检查后确认该工作区沿用 SVG 的图片预览默认关联；独立提交 `2c15ac9` 在示例工作区设置 `*.svg` 使用文本编辑器并补充操作说明。用户再次演示时，点击大纲项后停在源码第 4 行 `<rect id="start" .../>`，窗口底部显示“行 4，列 5”。原始截图还需保存到 `doc/evidence/lab2/` 才能作为仓库内证据提交。
+用户随后在本机扩展开发窗口实际演示：Explorer 中 `example.svg` 带 `[]`，`notes.txt` 和 `sample-dir/` 无标记；源码编辑器的 Outline 展示 `svg → g#flow → rect#start`、无 id 的 `text`、`g#next → circle#point`。首次点击 `rect#start` 会切换到 SVG 图片预览，无法完成源码定位。检查后确认该工作区沿用 SVG 的图片预览默认关联；独立提交 `2c15ac9` 在示例工作区设置 `*.svg` 使用文本编辑器并补充操作说明。用户再次演示时，点击大纲项后停在源码第 4 行 `<rect id="start" .../>`，窗口底部显示“行 4，列 5”。两张原始截图由用户保存到 `doc/evidence/lab2/`；单独的文件标记图显示 `example.svg`，大纲图同时显示 `sample-dir/` 与 `notes.txt` 作为无标记对照。
 
 ## 2026-11-12 — 四扩展点、命令与 box 插件
 

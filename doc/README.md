@@ -351,7 +351,7 @@ CLI 测试脚本：执行成功
 
 扩展源码、示例和启动步骤在 [vscode-extension](../vscode-extension/README.md)。`SvgFileDecorationProvider.provideFileDecoration()` 仅对真实的 `.svg` 文件返回 badge `[]`；它不重命名、不写入文件，名字以 `.svg` 结尾的目录也不标记。`SvgDocumentSymbolProvider.provideDocumentSymbols()` 从当前文本重新生成带范围的嵌套 `DocumentSymbol`，名称为标签名或 `标签名#id`，由 VSCode 原生 Outline 绘制和定位。`SvgOutlineParser.parse()` 遇到未闭合或不匹配的标签时返回空列表，编辑过程中不会因解析异常使扩展崩溃。
 
-VSCode 提供 Explorer、Outline、文档变化调度和源码定位；插件在 `extension.activate()` 中注册两个提供者。之后由 VSCode 在需要展示某个 URI 或重算当前文档符号时调用提供者，插件只交回元数据和源码范围。实现依据为 [VSCode 文件装饰与文档符号 API](https://code.visualstudio.com/api/references/vscode-api)；实际开发窗口的观察和截图保存在 `doc/evidence/lab2/` 后作为界面验收证据。当前自动测试验证了嵌套分组、无 id、编辑后重新解析、不完整 XML、文件与目录区分以及源码选择范围。
+VSCode 提供 Explorer、Outline、文档变化调度和源码定位；插件在 `extension.activate()` 中注册两个提供者。之后由 VSCode 在需要展示某个 URI 或重算当前文档符号时调用提供者，插件只交回元数据和源码范围。实现依据为 [VSCode 文件装饰与文档符号 API](https://code.visualstudio.com/api/references/vscode-api)；实际开发窗口的观察和截图保存在 [doc/evidence/lab2](evidence/lab2/README.md) 作为界面验收证据。当前自动测试验证了嵌套分组、无 id、编辑后重新解析、不完整 XML、文件与目录区分以及源码选择范围。
 
 | 模式 | 对应关系 | 关键差异 |
 |---|---|---|
@@ -482,4 +482,4 @@ package "可选插件 plugins" {
 
 验收会话及预期输出见 [doc/transcript](transcript/README.md)。`scripts/verify-transcripts.js` 从 `final` Git 对象编译出基线，对比关闭可选插件时的原始输出；再对 Lab 1 会话、box 会话、`stats/dir` 会话分别比较代码装配与配置装配的原始输出，三组均逐字节一致。`npm test` 包含 CLI 冒烟、Phase 1 回归、插件独立与失败路径测试、VSCode 解析与提供者测试。指标在 [docs/metrics](../docs/metrics/summary.md)；脚本从 Git 对象计算文件清单、分类行数和复杂度增量，VSCode 扩展单独列出。
 
-用户在图形桌面的扩展开发窗口已实际观察到：只有 SVG 文件带 `[]`；Outline 展示嵌套分组、无 id 文本节点和叶子节点；点击 `rect#start` 后源码定位在第 4 行。首次演示时，VSCode 的 SVG 图片预览默认关联使点击跳到预览；示例工作区已在提交 `2c15ac9` 中设置 SVG 默认使用文本编辑器，重新演示后定位成功。本执行环境无法直接抓取该图形窗口；原始截图仍需保存到 `doc/evidence/lab2/` 后纳入仓库证据。自动测试不替代这一步。
+用户在图形桌面的扩展开发窗口已实际观察到：只有 SVG 文件带 `[]`；Outline 展示嵌套分组、无 id 文本节点和叶子节点；点击 `rect#start` 后源码定位在第 4 行。首次演示时，VSCode 的 SVG 图片预览默认关联使点击跳到预览；示例工作区已在提交 `2c15ac9` 中设置 SVG 默认使用文本编辑器，重新演示后定位成功。原始截图见 [文件标记](evidence/lab2/vscode-svg-badge.png) 和 [大纲定位](evidence/lab2/vscode-svg-outline.png)；截图中可见文件类型对照、嵌套大纲与第 4 行定位。编辑后更新与不完整 XML 的安全处理另由自动测试验证。
