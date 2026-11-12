@@ -200,3 +200,25 @@ node --test dist/test/group-state.test.js dist/test/set-history.test.js
 ### 发布约束
 
 保留所有既有提交，不变基、不压缩提交、不强制推送。本轮按功能修复、工厂集中化、组合变换及文档分步新增提交；代码及文档完成后普通推送主分支，再交叉核对当前提交、远端跟踪引用、工作区及 `final`。`final` 保留在 `5d7ab2a`，待用户审阅明确确认后才移动。
+
+---
+
+## 2026-11-12 — Phase 2 规约与原始材料归档
+
+检查 `main`、`origin/main`、`final` 均在 `a231a63`，Phase 1 的 `npm test` 为 32 项通过。用户确认属性冲突、box 读回、dirty、祖先传播等八项设计取舍均采用建议方案，并确认 Lab 1 的提交说明和 PDF 一并纳入最终提交。课程材料移至 `doc/requests/`，提交材料移至 `doc/submissions/lab1-phase1/`；`.DS_Store` 不纳入。规约和工作规范分别记录在 `PHASE2_SPEC.md`、`PHASE2_WORK_RULES.md`，原始要求内容保持不变。
+
+## 2026-11-12 — VSCode 扩展与独立验证
+
+依据官方 VSCode 文件装饰与文档符号 API，分别注册 `FileDecorationProvider` 和 `DocumentSymbolProvider`。源码解析器只建立 Outline 所需的元素树及偏移，支持嵌套、无 id、编辑后更新和不完整 XML。曾尝试从 npm 获取 `@types/vscode`，环境 DNS 返回 `ENOTFOUND`；改为在扩展内声明所用稳定 API 的最小类型边界，运行时仍由 VSCode 提供 `vscode` 模块。六项自动测试通过。
+
+尝试用独立配置启动 VSCode 开发窗口；当前执行环境没有可访问的图形显示，`screencapture` 在普通及提权执行下均返回 `could not create image from display`。因此界面观察和两张真实截图尚待图形桌面补证，不能以课程要求自带的示意图替代。
+
+## 2026-11-12 — 四扩展点、命令与 box 插件
+
+先把固定工厂与命令表变成内核侧注册表及默认提供者，保留 Phase 1 输出。首次重构中，SVG 读回在文本节点处因严格解析误报 `invalid svg`；原有往返测试失败后，修正为跳过文本段，并保留缺 id 的分配顺序。Lab 1 的 32 项测试随后恢复全部通过。指标脚本从 `final` 与框架提交的 Git 对象生成首次结果。
+
+`stats` 和 `dir` 在独立插件包中实现；`dir` 使用 `DirectoryAccess` 与 Node 适配器，替身测试覆盖目录、文件、隐藏项、空目录、失败和排序，真实临时目录及双装配输出也经过验证。加载器测试覆盖找不到模块、缺少默认导出、清单不一致、激活失败、重复注册、回滚、禁用项和依赖求值失败。
+
+box 的代码装配提交 `0fb561a` 只增加新插件包、修改 `CodeAssembly.ts` 并加测试；配置装配提交 `16b1237` 只修改配置并加测试。后来审查发现 box 最初直接导入内置 `RectShape`、`TextShape`，与“只依赖公开领域 API”的规约冲突。提交 `7c32892` 增加 `PluginContext.createShape()`，让 box 通过公开图形接口生成、读取和修改子部件；修改后全套测试和逐字节会话比较仍通过。
+
+`modified-star` 独立保存基线快照，编辑、保存、再编辑、undo 回保存点的状态机与 box 标签顺序均有测试。之后补充插件异常处理、可选装配、四类会话失败路径及三组命令输入。`scripts/verify-transcripts.js` 从 `final` 构建基线，确认关闭可选插件时 Lab 1 输入的原始输出逐字节相同；代码与配置装配在 Lab 1、box、`stats/dir` 三组输入上的原始输出逐字节相同。随后补充 malformed box 的 CLI 读入反馈及原文档、历史不变测试。最后一次完整运行：CLI 52 项、VSCode 6 项均通过，另有命令行冒烟及 Phase 1 验收脚本成功。
