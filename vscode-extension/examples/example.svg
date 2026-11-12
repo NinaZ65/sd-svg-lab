@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="220">
+  <g id="flow">
+    <rect id="start" x="30" y="50" width="120" height="60" fill="#4a90d9"/>
+    <text x="45" y="85">开始</text>
+    <g id="next">
+      <circle id="point" cx="250" cy="80" r="30" fill="#f5a623"/>
+    </g>
+  </g>
+</svg>

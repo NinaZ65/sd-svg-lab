@@ -5,8 +5,9 @@
   "description": "SVG editor CLI skeleton for Phase 1",
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "build:vscode": "tsc -p vscode-extension/tsconfig.json",
     "cli": "npm run build && node dist/src/cli/CliApp.js",
-    "test": "npm run build && node dist/test/cli-smoke.js && node dist/test/phase1-validation.js && node --test dist/test/*.test.js"
+    "test": "npm run build && node dist/test/cli-smoke.js && node dist/test/phase1-validation.js && node --test dist/test/*.test.js && npm run build:vscode && node --test vscode-extension/test/*.test.js"
   },
   "devDependencies": {
     "@types/node": "^22.10.1",

@@ -1,0 +1,10 @@
+{
+  "name": "sd-svg-outline",
+  "displayName": "SVG File Badge and Outline",
+  "description": "Explorer badge and native Outline for SVG source files",
+  "version": "0.1.0",
+  "private": true,
+  "engines": { "vscode": "^1.80.0" },
+  "main": "./out/extension.js",
+  "activationEvents": ["onStartupFinished"]
+}
