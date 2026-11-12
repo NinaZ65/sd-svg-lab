@@ -9,7 +9,9 @@ npm run build:vscode
 code --new-window --extensionDevelopmentPath="$PWD/vscode-extension" "$PWD/vscode-extension/examples"
 ```
 
-在新窗口的 Explorer 中查看 `example.svg` 右侧的 `[]`；同目录的 `notes.txt` 与 `sample-dir/` 不带标记。双击打开 SVG 文件后，在资源管理器下方的“大纲 / Outline”视图查看 `svg → g#flow → rect#start` 等层级；如果视图没显示，可在命令面板执行 `View: Open View` 并选择 Outline。点击 `rect#start` 应定位到对应起始标签。修改 `id` 或增加图形后大纲应刷新；暂时删除闭合标签时大纲可清空，恢复后重新出现。
+示例工作区的 `.vscode/settings.json` 将 `*.svg` 默认关联到文本编辑器；打开窗口后如仍停留在已打开的图片预览标签，请关闭该标签，再从 Explorer 打开 `example.svg`。也可以在图片预览标签上右键，执行“使用其他编辑器重新打开 / Reopen Editor With”，将 `*.svg` 的默认编辑器设为“文本编辑器 / Text Editor”。
+
+在新窗口的 Explorer 中查看 `example.svg` 右侧的 `[]`；同目录的 `notes.txt` 与 `sample-dir/` 不带标记。在 SVG **源码编辑器**里，在资源管理器下方的“大纲 / Outline”视图查看 `svg → g#flow → rect#start` 等层级；如果视图没显示，可在命令面板执行 `View: Open View` 并选择 Outline。点击 `rect#start` 应定位到第 4 行的 `<rect id="start" .../>` 起始标签。修改 `id` 或增加图形后大纲应刷新；暂时删除闭合标签时大纲可清空，恢复后重新出现。
 
 示例文件：[example.svg](examples/example.svg)。扩展源码在 `src/`，Node 验证在 `test/`。运行 `npm test` 可验证解析、更新、异常输入、标记文件类型以及符号定位范围。截图证据保存在仓库的 `doc/evidence/lab2/`，应由实际扩展开发窗口取得。
 
