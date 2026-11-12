@@ -26,6 +26,12 @@ export class Document {
     this.canvas.resize(width, height);
   }
 
+  public newDocument(width: number, height: number): void {
+    this.canvas = new SvgCanvas(width, height);
+    this.root = new GroupShape('root');
+    this.lastPath = null;
+  }
+
   public hasShape(id: string): boolean {
     return this.findById(id) !== undefined;
   }
