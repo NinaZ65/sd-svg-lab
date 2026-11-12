@@ -30,6 +30,7 @@ export class PluginActivator {
   public activate(plugin: Plugin, manifest: PluginManifest, options?: unknown): void {
     const staged: Registrations = { shapes: [], commands: [], decorators: [], attributes: [] };
     const context: PluginContext = {
+      createShape: (kind, id, args) => this.shapes.create(kind, id, args),
       registerShape: provider => staged.shapes.push(provider),
       registerCommand: command => staged.commands.push(command),
       registerDecorator: decorator => staged.decorators.push(decorator),

@@ -32,7 +32,7 @@ test('stats and dir can be enabled independently, and options reach the same box
     assert.equal(assembly.commands.has('dir'), false);
     const document = new Document(800, 600, assembly.shapes);
     const shape = document.makeShape('box', 'n1', ['1', '2', '80', '40', 'Title']) as BoxShape;
-    assert.equal(shape.getRect().fill, '#123456');
+    assert.equal(shape.getRect().readAttribute('fill'), '#123456');
 
     const other = new Assembly();
     writeFileSync(config, JSON.stringify({ plugins: [{ module: dir }] }));

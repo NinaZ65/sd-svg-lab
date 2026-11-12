@@ -14,7 +14,7 @@ export class BoxAttributeHandler implements AttributeHandler {
       transaction.set(shape.getRect(), 'fill', value);
       return { executeMessage: `box#${shape.id} fill propagated to ${shape.getRect().id}` };
     }
-    const previous = shape.getLabel().text;
+    const previous = String(shape.getLabel().readAttribute('text'));
     transaction.set(shape.getLabel(), 'text', value);
     return {
       executeMessage: `box#${shape.id} label updated: "${value}"`,
