@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import stats from '../../plugins/stats/src';
 import dir from '../../plugins/dir/src';
+import box from '../../plugins/box/src';
 import { Plugin } from '../core/PluginContext';
 import { Assembly } from './Assembly';
 import { PluginManifest } from './PluginActivator';
@@ -16,5 +17,6 @@ export function assembleCode(): Assembly {
   };
   activate('stats', stats);
   activate('dir', dir);
+  activate('box', box);
   return assembly;
 }
