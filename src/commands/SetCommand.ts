@@ -27,6 +27,7 @@ export class SetCommand extends AbstractCommand {
       }
       if (handlers.length === 1) {
         const outcome = handlers[0].apply(target, attribute, value, transaction);
+        if (!transaction.hasChanges()) throw new Error(`attribute handler made no change: ${handlers[0].name}`);
         context.recordAction(transaction.toHistoryAction(outcome.undoMessage, outcome.redoMessage));
         context.output.writeLine(outcome.executeMessage);
       } else {

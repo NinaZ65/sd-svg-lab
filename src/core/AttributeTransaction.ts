@@ -9,9 +9,11 @@ export class AttributeTransaction {
     const previous = shape.readAttribute(attribute);
     const next = typeof previous === 'number' ? Number(rawValue) : rawValue;
     if (typeof next === 'number' && !Number.isFinite(next)) throw new Error(`invalid numeric value: ${rawValue}`);
-    shape.writeAttribute(attribute, next);
     this.changes.push({ shape, attribute, previous, next });
+    shape.writeAttribute(attribute, next);
   }
+
+  public hasChanges(): boolean { return this.changes.length > 0; }
 
   public rollback(): void {
     for (const change of [...this.changes].reverse()) change.shape.writeAttribute(change.attribute, change.previous);

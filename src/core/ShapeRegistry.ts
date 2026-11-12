@@ -16,11 +16,15 @@ export class ShapeRegistry {
   public create(name: string, id: string, args: readonly (string | undefined)[]): Shape {
     const provider = this.get(name.toLowerCase());
     if (!provider) throw new Error(`unknown shape type: ${name}`);
-    return provider.create(id, args);
+    const shape = provider.create(id, args);
+    if (shape.id !== id || shape.getKind() !== provider.name) throw new Error(`invalid shape provider: ${provider.name}`);
+    return shape;
   }
 
   public read(tag: string, id: string, attributes: Readonly<Record<string, string>>, text: string, children: readonly Shape[]): Shape | undefined {
     const provider = this.get(attributes['data-kind'] ?? tag) ?? this.get(tag);
-    return provider?.read(id, attributes, text, children);
+    const shape = provider?.read(id, attributes, text, children);
+    if (shape && shape.id !== id) throw new Error(`invalid shape provider: ${provider?.name}`);
+    return shape;
   }
 }

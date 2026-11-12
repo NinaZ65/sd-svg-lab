@@ -14,7 +14,8 @@ export class TreeCommand extends AbstractCommand {
     if (args.length === 0) {
       const lines = [`svg (${canvas.toString()})`, ...root.renderTree(0)];
       const shapes: (Shape | null)[] = [null, ...this.flatten(root)];
-      context.output.writeLine(context.decorators.decorate(lines, shapes, context.document).join('\n'));
+      try { context.output.writeLine(context.decorators.decorate(lines, shapes, context.document).join('\n')); }
+      catch (error) { context.output.error(error instanceof Error ? error.message : 'tree decoration failed'); }
       return;
     }
 
@@ -26,7 +27,8 @@ export class TreeCommand extends AbstractCommand {
 
     const lines = [`${target.getTreeDisplayName()}`, ...target.renderTree(1)];
     const shapes = [target, ...this.flatten(target)];
-    context.output.writeLine(context.decorators.decorate(lines, shapes, context.document).join('\n'));
+    try { context.output.writeLine(context.decorators.decorate(lines, shapes, context.document).join('\n')); }
+    catch (error) { context.output.error(error instanceof Error ? error.message : 'tree decoration failed'); }
   }
 
   private flatten(shape: Shape): Shape[] {

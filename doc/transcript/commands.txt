@@ -1,0 +1,10 @@
+dir
+init 400 300
+create g scene
+create rect r1 0 0 20 20 red in scene
+create circle c1 50 50 10 in scene
+create text t1 10 90 "Hello" in scene
+stats
+tree
+dir
+exit

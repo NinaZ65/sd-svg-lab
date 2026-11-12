@@ -23,7 +23,11 @@ export class CommandRegistry {
       context.output.error(`unknown command: ${commandName}`);
       return false;
     }
-    command.execute(context, args);
+    try {
+      command.execute(context, args);
+    } catch (error) {
+      context.output.error(`command failed: ${command.name} (${error instanceof Error ? error.message : String(error)})`);
+    }
     return context.shouldExit;
   }
 

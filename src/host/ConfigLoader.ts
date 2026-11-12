@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { dirname, isAbsolute, resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, isAbsolute, join, parse, resolve } from 'node:path';
 import { ConsoleOutput } from '../io/ConsoleOutput';
 import { Assembly } from './Assembly';
 import { PluginManifest } from './PluginActivator';
@@ -46,10 +46,10 @@ export class ConfigLoader {
 
     let manifest: PluginManifest;
     try {
-      const packageRequest = entry.module.startsWith('.') || isAbsolute(entry.module)
+      const packagePath = entry.module.startsWith('.') || isAbsolute(entry.module)
         ? resolve(base, entry.module, 'package.json')
-        : `${entry.module}/package.json`;
-      manifest = require(require.resolve(packageRequest, { paths: [base] })) as PluginManifest;
+        : this.findPackageManifest(resolved, entry.module);
+      manifest = JSON.parse(readFileSync(packagePath, 'utf8')) as PluginManifest;
     } catch (error) {
       this.output.error(`plugin failed to activate: ${entry.module} (${this.reason(error)})`);
       return;
@@ -70,4 +70,17 @@ export class ConfigLoader {
   }
 
   private reason(error: unknown): string { return error instanceof Error ? error.message : String(error); }
+
+  private findPackageManifest(resolved: string, packageName: string): string {
+    let directory = dirname(resolved);
+    while (directory !== parse(directory).root) {
+      const candidate = join(directory, 'package.json');
+      if (existsSync(candidate)) {
+        const value = JSON.parse(readFileSync(candidate, 'utf8')) as { name?: string };
+        if (value.name === packageName) return candidate;
+      }
+      directory = dirname(directory);
+    }
+    throw new Error(`package manifest not found: ${packageName}`);
+  }
 }
