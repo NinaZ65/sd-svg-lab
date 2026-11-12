@@ -224,3 +224,5 @@ node --test dist/test/group-state.test.js dist/test/set-history.test.js
 box 的代码装配提交 `0fb561a` 只增加新插件包、修改 `CodeAssembly.ts` 并加测试；配置装配提交 `16b1237` 只修改配置并加测试。后来审查发现 box 最初直接导入内置 `RectShape`、`TextShape`，与“只依赖公开领域 API”的规约冲突。提交 `7c32892` 增加 `PluginContext.createShape()`，让 box 通过公开图形接口生成、读取和修改子部件；修改后全套测试和逐字节会话比较仍通过。
 
 `modified-star` 独立保存基线快照，编辑、保存、再编辑、undo 回保存点的状态机与 box 标签顺序均有测试。之后补充插件异常处理、可选装配、四类会话失败路径及三组命令输入。`scripts/verify-transcripts.js` 从 `final` 构建基线，确认关闭可选插件时 Lab 1 输入的原始输出逐字节相同；代码与配置装配在 Lab 1、box、`stats/dir` 三组输入上的原始输出逐字节相同。随后补充 malformed box 的 CLI 读入反馈及原文档、历史不变测试。最后一次完整运行：CLI 52 项、VSCode 6 项均通过，另有命令行冒烟及 Phase 1 验收脚本成功。
+
+两张真实截图入库后再次运行 `npm test`：CLI 52 项和 VSCode 6 项通过，命令行冒烟及 Phase 1 验收脚本成功。再次运行 `node scripts/verify-transcripts.js`，`final` 与关闭可选插件的 Lab 1 会话、代码与配置装配的三组会话均逐字节一致。
