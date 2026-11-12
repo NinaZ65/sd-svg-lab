@@ -62,7 +62,7 @@ export class CreateCommand extends AbstractCommand {
           targetParent.addChild(shape);
         },
       });
-      context.output.writeLine(`${shape.getDisplayName()} created${containerId ? ` in ${targetParent.getDisplayName()}` : ''}`);
+      context.output.writeLine(`${shape.createdMessage()}${containerId ? ` in ${targetParent.getDisplayName()}` : ''}`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'unknown error';
       context.output.error(errorMessage);

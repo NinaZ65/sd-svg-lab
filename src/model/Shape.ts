@@ -9,6 +9,8 @@ export abstract class Shape {
 
   public abstract getDisplayName(): string;
 
+  public createdMessage(): string { return `${this.getDisplayName()} created`; }
+
   public getTreeDisplayName(): string { return this.getDisplayName(); }
 
   public abstract renderTree(depth: number): string[];
