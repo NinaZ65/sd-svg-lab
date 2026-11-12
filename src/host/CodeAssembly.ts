@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import stats from '../../plugins/stats/src';
 import dir from '../../plugins/dir/src';
 import box from '../../plugins/box/src';
+import treeStar from '../../plugins/tree-star/src';
 import { Plugin } from '../core/PluginContext';
 import { Assembly } from './Assembly';
 import { PluginManifest } from './PluginActivator';
@@ -18,5 +19,6 @@ export function assembleCode(): Assembly {
   activate('stats', stats);
   activate('dir', dir);
   activate('box', box);
+  activate('tree-star', treeStar);
   return assembly;
 }
