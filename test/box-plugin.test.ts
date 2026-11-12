@@ -10,6 +10,9 @@ import { ConsoleOutput } from '../src/io/ConsoleOutput';
 import { Document } from '../src/model/Document';
 import { Shape } from '../src/model/Shape';
 import { RectShape } from '../src/model/shapes/RectShape';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 class CaptureOutput extends ConsoleOutput {
   public readonly lines: string[] = [];
@@ -73,6 +76,22 @@ test('box read round-trip, downgrade, malformed read rollback, and duplicate id 
   assert.equal(restored.document.serializeSvg(), before);
   assert.throws(() => restored.document.deserializeSvg(svg.replace('id="n1-label"', 'id="n1-rect"')), /id already exists/);
   assert.equal(restored.document.serializeSvg(), before);
+});
+
+test('CLI read reports malformed box details while keeping document and history', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'svg-box-read-'));
+  try {
+    const file = join(dir, 'broken.svg');
+    writeFileSync(file, '<svg><g id="n1" data-kind="box"><rect id="n1-rect"/></g></svg>');
+    const app = setup();
+    app.run('create rect keep 0 0 10 10');
+    const before = app.document.serializeSvg();
+    const depth = app.history.getUndoDepth();
+    app.run(`read ${file}`);
+    assert.match(app.output.lines.at(-1)!, /invalid box: n1/);
+    assert.equal(app.document.serializeSvg(), before);
+    assert.equal(app.history.getUndoDepth(), depth);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('box rejects descendant id collision and structural removal of required children', () => {

@@ -13,16 +13,24 @@ export class ReadCommand extends AbstractCommand {
       return;
     }
 
+    let content: string;
     try {
-      const content = readFileSync(filePath, 'utf8');
+      content = readFileSync(filePath, 'utf8');
+    } catch {
+      context.output.error(`cannot read file: ${filePath}`);
+      return;
+    }
+
+    try {
       const warnings: string[] = [];
       context.document.deserializeSvg(content, message => warnings.push(message));
       context.document.setLastPath(filePath);
       context.markIoCommand(true);
       for (const warning of warnings) context.output.warning(warning);
       context.output.writeLine(`read ${filePath}`);
-    } catch (_error) {
-      context.output.error(`cannot read file: ${filePath}`);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      context.output.error(`cannot read file: ${filePath} (${reason})`);
     }
   }
 }
