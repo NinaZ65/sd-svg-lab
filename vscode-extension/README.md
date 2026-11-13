@@ -17,10 +17,16 @@ code --new-window --extensionDevelopmentPath="$PWD/vscode-extension" "$PWD/vscod
 
 示例是一张“提交—审核—完成”的内容发布流程图：三个步骤统一为 160 × 64 的圆角框，相隔 100 个源码坐标单位，分别以蓝、橙、绿表示输入、处理和完成；编号与文字同时表达步骤，避免仅靠颜色识别。`g#next` 内嵌 `g#result`，步骤文字有意不设 id，用同一份材料演示嵌套、无 id 节点、尺寸和文字摘要。`rect#start` 保留在第 4 行，点击定位仍易于核对。根元素的 title、desc 提供图形的文字说明。
 
+## 大纲显示细节
+
+名称保留 `标签#id`（无 id 时只显示标签）；旁边的辅助文字显示源码中显式给出的尺寸、半径或文字摘要。例如 `rect#start` 的摘要为 `160 × 64`，其后的 `text` 为 `“用户提交”`。文字合并空白、解码 XML 实体，超过 32 个 Unicode 字符时截断并加省略号；不推算样式表和变换后的尺寸。
+
+根、容器、图形和文字分别使用原生 File、Array、Object、String 符号类型；容器使用集合图标，文字使用字符串图标，具体样式和颜色随编辑器主题变化。辅助文字的颜色也由 VSCode 主题决定。悬浮在 Explorer 的 `[]` 标记上会看到“SVG 源文件 · 可在大纲中查看元素结构”。
+
 ## API 与边界
 
 点击大纲节点时，提供给 VSCode 的 `selectionRange` 覆盖该元素的完整起始标签，多行属性也在范围内；`range` 保留整个元素及其子树，使容器的归属范围完整。实体解码和文字摘要不会改变源码偏移。实际选中及滚动效果由 VSCode 的原生导航处理。
 
-扩展启动时注册 `FileDecorationProvider` 和 `DocumentSymbolProvider`，由 VSCode 在需要展示 Explorer 或 Outline 时回调。文件装饰只返回界面 badge，不修改文件。大纲提供带源代码范围的嵌套 `DocumentSymbol`，由 VSCode 完成视图绘制、点击定位和编辑后的重新请求。解析器只提取用于大纲的 XML 元素结构；不负责完整 SVG 校验、渲染或 CLI 模型构造。
+扩展启动时注册 `FileDecorationProvider` 和 `DocumentSymbolProvider`，由 VSCode 在需要展示 Explorer 或 Outline 时回调。文件装饰只返回界面 badge，不修改文件。大纲提供带源代码范围的嵌套 `DocumentSymbol`，由 VSCode 完成视图绘制、点击定位和编辑后的重新请求。解析器只提取用于大纲的 XML 元素结构、属性及文字信息；不负责完整 SVG 校验、渲染或 CLI 模型构造。
 
 由于此工作区的 npm 网络不可达，`types/vscode.d.ts` 只声明本扩展使用的稳定 API；运行时 `vscode` 模块仍由扩展宿主提供。接口可对照 [VSCode API 文档](https://code.visualstudio.com/api/references/vscode-api)。

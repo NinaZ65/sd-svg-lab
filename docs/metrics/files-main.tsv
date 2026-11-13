@@ -1,0 +1,77 @@
+path	bucket	role	physical_lines	complexity
+plugins/box/src/BoxAttributeHandler.ts	插件	Lab 2 可选插件	25	6
+plugins/box/src/BoxProvider.ts	插件	Lab 2 可选插件	29	12
+plugins/box/src/BoxShape.ts	插件	Lab 2 可选插件	21	10
+plugins/box/src/BoxTypeDecorator.ts	插件	Lab 2 可选插件	10	2
+plugins/box/src/index.ts	插件	Lab 2 可选插件	16	5
+plugins/dir/src/DirCommand.ts	插件	Lab 2 可选插件	29	12
+plugins/dir/src/DirectoryAccess.ts	插件	Lab 2 可选插件	6	0
+plugins/dir/src/NodeDirectoryAdapter.ts	插件	Lab 2 可选插件	11	2
+plugins/dir/src/index.ts	插件	Lab 2 可选插件	11	2
+plugins/stats/src/StatsCommand.ts	插件	Lab 2 可选插件	34	8
+plugins/stats/src/index.ts	插件	Lab 2 可选插件	8	1
+plugins/tree-star/src/ModifiedStar.ts	插件	Lab 2 可选插件	27	9
+plugins/tree-star/src/index.ts	插件	Lab 2 可选插件	8	1
+src/builtin/registerBuiltinCommands.ts	插件	默认图形或内置命令实现	44	1
+src/builtin/registerBuiltinShapes.ts	插件	默认图形或内置命令实现	16	1
+src/builtin/shapes/CircleProvider.ts	插件	默认图形或内置命令实现	13	5
+src/builtin/shapes/EllipseProvider.ts	插件	默认图形或内置命令实现	13	6
+src/builtin/shapes/GroupProvider.ts	插件	默认图形或内置命令实现	13	3
+src/builtin/shapes/LineProvider.ts	插件	默认图形或内置命令实现	13	6
+src/builtin/shapes/RectProvider.ts	插件	默认图形或内置命令实现	13	6
+src/builtin/shapes/TextProvider.ts	插件	默认图形或内置命令实现	13	5
+src/cli/CliApp.ts	装配处	启动、加载或技术适配	20	3
+src/cli/CommandRegistry.ts	内核	领域模型、历史或扩展契约	53	17
+src/cli/ReplLoop.ts	装配处	启动、加载或技术适配	52	8
+src/commands/AbstractCommand.ts	内核	领域模型、历史或扩展契约	9	0
+src/commands/AddtoCommand.ts	插件	默认图形或内置命令实现	64	13
+src/commands/BackCommand.ts	插件	默认图形或内置命令实现	43	7
+src/commands/CanvasCommand.ts	插件	默认图形或内置命令实现	33	7
+src/commands/Command.ts	内核	领域模型、历史或扩展契约	8	0
+src/commands/CommandContext.ts	内核	领域模型、历史或扩展契约	32	6
+src/commands/CreateCommand.ts	插件	默认图形或内置命令实现	71	18
+src/commands/DeleteCommand.ts	插件	默认图形或内置命令实现	44	7
+src/commands/ExitCommand.ts	插件	默认图形或内置命令实现	11	1
+src/commands/FrontCommand.ts	插件	默认图形或内置命令实现	44	7
+src/commands/GroupCommand.ts	插件	默认图形或内置命令实现	99	20
+src/commands/HelpCommand.ts	插件	默认图形或内置命令实现	38	3
+src/commands/InitCommand.ts	插件	默认图形或内置命令实现	21	7
+src/commands/MoveCommand.ts	插件	默认图形或内置命令实现	36	6
+src/commands/ReadCommand.ts	插件	默认图形或内置命令实现	36	7
+src/commands/RedoCommand.ts	插件	默认图形或内置命令实现	22	4
+src/commands/SaveCommand.ts	插件	默认图形或内置命令实现	21	4
+src/commands/ScaleCommand.ts	插件	默认图形或内置命令实现	35	6
+src/commands/SetCommand.ts	插件	默认图形或内置命令实现	43	9
+src/commands/ShowCommand.ts	插件	默认图形或内置命令实现	23	4
+src/commands/TreeCommand.ts	插件	默认图形或内置命令实现	39	10
+src/commands/UndoCommand.ts	插件	默认图形或内置命令实现	22	4
+src/commands/UngroupCommand.ts	插件	默认图形或内置命令实现	66	13
+src/core/AttributeHandler.ts	内核	领域模型、历史或扩展契约	14	0
+src/core/AttributeRegistry.ts	内核	领域模型、历史或扩展契约	17	5
+src/core/AttributeTransaction.ts	内核	领域模型、历史或扩展契约	31	13
+src/core/PluginContext.ts	内核	领域模型、历史或扩展契约	17	0
+src/core/ShapeProvider.ts	内核	领域模型、历史或扩展契约	7	0
+src/core/ShapeRegistry.ts	内核	领域模型、历史或扩展契约	30	12
+src/core/TreeDecorator.ts	内核	领域模型、历史或扩展契约	9	0
+src/core/TreeDecoratorRegistry.ts	内核	领域模型、历史或扩展契约	32	14
+src/history/HistoryManager.ts	内核	领域模型、历史或扩展契约	75	15
+src/host/Assembly.ts	装配处	启动、加载或技术适配	20	1
+src/host/CodeAssembly.ts	装配处	启动、加载或技术适配	24	2
+src/host/ConfigLoader.ts	装配处	启动、加载或技术适配	86	31
+src/host/PluginActivator.ts	装配处	启动、加载或技术适配	85	32
+src/io/ConsoleInput.ts	装配处	启动、加载或技术适配	11	1
+src/io/ConsoleOutput.ts	装配处	启动、加载或技术适配	17	4
+src/model/Document.ts	内核	领域模型、历史或扩展契约	228	59
+src/model/Shape.ts	内核	领域模型、历史或扩展契约	49	10
+src/model/SvgCanvas.ts	内核	领域模型、历史或扩展契约	26	5
+src/model/shapes/CircleShape.ts	插件	默认图形或内置命令实现	81	26
+src/model/shapes/EllipseShape.ts	插件	默认图形或内置命令实现	87	29
+src/model/shapes/GroupShape.ts	内核	领域模型、历史或扩展契约	127	32
+src/model/shapes/LineShape.ts	插件	默认图形或内置命令实现	89	29
+src/model/shapes/RectShape.ts	插件	默认图形或内置命令实现	87	29
+src/model/shapes/TextShape.ts	插件	默认图形或内置命令实现	73	21
+vscode-extension/src/SvgDocumentSymbolProvider.ts	VSCode 扩展	文件标记、大纲或解析	28	9
+vscode-extension/src/SvgFileDecorationProvider.ts	VSCode 扩展	文件标记、大纲或解析	14	4
+vscode-extension/src/SvgOutlineDetails.ts	VSCode 扩展	文件标记、大纲或解析	23	14
+vscode-extension/src/SvgOutlineParser.ts	VSCode 扩展	文件标记、大纲或解析	110	41
+vscode-extension/src/extension.ts	VSCode 扩展	文件标记、大纲或解析	14	2

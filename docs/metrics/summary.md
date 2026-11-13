@@ -1,6 +1,6 @@
 # CLI 重构指标
 
-由 `node scripts/generate-metrics.js final p2` 从 Git 对象生成；打 `p2` 前暂用 HEAD 的源码树生成，打 tag 后重跑核验。
+由 `node scripts/generate-metrics.js final main` 从 Git 对象生成；基线为 `final`，当前源码快照为 `main`。
 行数为 TypeScript 源文件物理行数。复杂度估算为每个函数/方法 1，加上分支、循环、catch、条件表达式及 `&&` / `||` / `??` 的数量；不计构建产物、依赖包、测试和声明文件。
 VSCode 扩展单列，不计入 CLI 增量。
 
@@ -9,6 +9,6 @@ VSCode 扩展单列，不计入 CLI 增量。
 | 内核 | 9 | 17 | 660 | 764 | 104 | 130 | 188 | 58 |
 | 装配处 | 4 | 8 | 79 | 315 | 236 | 12 | 82 | 70 |
 | 插件 | 26 | 46 | 1102 | 1601 | 499 | 247 | 394 | 147 |
-| VSCode 扩展 | 0 | 4 | 0 | 139 | 139 | 0 | 43 | 43 |
+| VSCode 扩展 | 0 | 5 | 0 | 189 | 189 | 0 | 70 | 70 |
 
-文件与职责详见 `files-final.tsv` 和 `files-p2.tsv`。
+文件与职责详见 `files-final.tsv` 和 `files-main.tsv`。

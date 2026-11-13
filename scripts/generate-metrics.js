@@ -73,7 +73,7 @@ for (const [label, data] of [[baseline, before], [current, after]]) {
 const buckets = ['内核', '装配处', '插件', 'VSCode 扩展'];
 const lines = [
   '# CLI 重构指标', '',
-  `由 \`node scripts/generate-metrics.js ${baseline} ${current}\` 从 Git 对象生成；打 \`p2\` 前暂用 HEAD 的源码树生成，打 tag 后重跑核验。`,
+  `由 \`node scripts/generate-metrics.js ${baseline} ${current}\` 从 Git 对象生成；基线为 \`${baseline}\`，当前源码快照为 \`${currentSource}\`。`,
   '行数为 TypeScript 源文件物理行数。复杂度估算为每个函数/方法 1，加上分支、循环、catch、条件表达式及 `&&` / `||` / `??` 的数量；不计构建产物、依赖包、测试和声明文件。',
   'VSCode 扩展单列，不计入 CLI 增量。', '',
   '| 分类 | 基线文件 | 当前文件 | 基线行数 | 当前行数 | 行数增量 | 基线复杂度 | 当前复杂度 | 复杂度增量 |',
