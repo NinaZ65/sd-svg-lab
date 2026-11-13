@@ -6,7 +6,7 @@ const fakeVscode = {
   FileType: { File: 1, Directory: 2 },
   FileDecoration: class { constructor(badge, tooltip) { this.badge = badge; this.tooltip = tooltip; } },
   workspace: { fs: { stat: async uri => ({ type: uri.type }) } },
-  SymbolKind: { File: 0, Namespace: 2, Object: 18 },
+  SymbolKind: { File: 0, Namespace: 2, String: 14, Array: 17, Object: 18 },
   Range: class { constructor(start, end) { this.start = start; this.end = end; } },
   DocumentSymbol: class {
     constructor(name, detail, kind, range, selectionRange) {
@@ -28,6 +28,20 @@ function symbols(source) {
     getText: () => source, positionAt: offset => offset,
   }, { isCancellationRequested: false });
 }
+
+test('native symbol kinds distinguish SVG roots, containers, shapes and text while preserving source order', () => {
+  const [svg] = symbols('<svg><g id="flow"><rect/><text><tspan>开始</tspan></text></g><defs><clipPath><path/></clipPath></defs><custom/></svg>');
+  assert.equal(svg.kind, fakeVscode.SymbolKind.File);
+  const [group, defs, unknown] = svg.children;
+  assert.equal(group.kind, fakeVscode.SymbolKind.Array);
+  assert.equal(defs.kind, fakeVscode.SymbolKind.Array);
+  assert.equal(defs.children[0].kind, fakeVscode.SymbolKind.Array);
+  assert.deepEqual(group.children.map(node => node.name), ['rect', 'text']);
+  assert.equal(group.children[0].kind, fakeVscode.SymbolKind.Object);
+  assert.equal(group.children[1].kind, fakeVscode.SymbolKind.String);
+  assert.equal(group.children[1].children[0].kind, fakeVscode.SymbolKind.String);
+  assert.equal(unknown.kind, fakeVscode.SymbolKind.Object);
+});
 
 test('file decoration marks only SVG files, not directories or other files', async () => {
   const provider = new SvgFileDecorationProvider();

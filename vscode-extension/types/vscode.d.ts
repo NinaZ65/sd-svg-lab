@@ -14,7 +14,7 @@ declare module 'vscode' {
   }
   export class Position { constructor(line: number, character: number) }
   export class Range { constructor(start: Position, end: Position) }
-  export enum SymbolKind { File = 0, Module = 1, Namespace = 2, Object = 18 }
+  export enum SymbolKind { File = 0, Module = 1, Namespace = 2, String = 14, Array = 17, Object = 18 }
   export class DocumentSymbol {
     constructor(name: string, detail: string, kind: SymbolKind, range: Range, selectionRange: Range);
     readonly children: DocumentSymbol[];

@@ -4,6 +4,7 @@ import { outlineDetail } from './SvgOutlineDetails';
 
 export class SvgDocumentSymbolProvider implements vscode.DocumentSymbolProvider {
   private readonly parser = new SvgOutlineParser();
+  private readonly containers = new Set(['g', 'defs', 'symbol', 'clipPath', 'mask', 'pattern', 'marker', 'a', 'switch']);
 
   public provideDocumentSymbols(document: vscode.TextDocument, token: vscode.CancellationToken): vscode.DocumentSymbol[] {
     if (token.isCancellationRequested) return [];
@@ -14,7 +15,8 @@ export class SvgDocumentSymbolProvider implements vscode.DocumentSymbolProvider 
     const range = new vscode.Range(document.positionAt(node.start), document.positionAt(node.end));
     const selectionRange = new vscode.Range(document.positionAt(node.start), document.positionAt(node.openingEnd));
     const kind = node.tag === 'svg' ? vscode.SymbolKind.File
-      : node.tag === 'g' ? vscode.SymbolKind.Namespace : vscode.SymbolKind.Object;
+      : this.containers.has(node.tag) ? vscode.SymbolKind.Array
+      : ['text', 'tspan', 'textPath'].includes(node.tag) ? vscode.SymbolKind.String : vscode.SymbolKind.Object;
     const symbol = new vscode.DocumentSymbol(
       node.id ? `${node.tag}#${node.id}` : node.tag, outlineDetail(node), kind, range, selectionRange,
     );
