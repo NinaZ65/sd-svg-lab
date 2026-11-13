@@ -17,6 +17,8 @@ code --new-window --extensionDevelopmentPath="$PWD/vscode-extension" "$PWD/vscod
 
 ## API 与边界
 
+点击大纲节点时，提供给 VSCode 的 `selectionRange` 覆盖该元素的完整起始标签，多行属性也在范围内；`range` 保留整个元素及其子树，使容器的归属范围完整。实体解码和文字摘要不会改变源码偏移。实际选中及滚动效果由 VSCode 的原生导航处理。
+
 扩展启动时注册 `FileDecorationProvider` 和 `DocumentSymbolProvider`，由 VSCode 在需要展示 Explorer 或 Outline 时回调。文件装饰只返回界面 badge，不修改文件。大纲提供带源代码范围的嵌套 `DocumentSymbol`，由 VSCode 完成视图绘制、点击定位和编辑后的重新请求。解析器只提取用于大纲的 XML 元素结构；不负责完整 SVG 校验、渲染或 CLI 模型构造。
 
 由于此工作区的 npm 网络不可达，`types/vscode.d.ts` 只声明本扩展使用的稳定 API；运行时 `vscode` 模块仍由扩展宿主提供。接口可对照 [VSCode API 文档](https://code.visualstudio.com/api/references/vscode-api)。

@@ -12,6 +12,8 @@ export class SvgDocumentSymbolProvider implements vscode.DocumentSymbolProvider 
   }
 
   private toSymbol(document: vscode.TextDocument, node: SvgElement): vscode.DocumentSymbol {
+    // The full element owns its subtree; navigation selects only the opening tag.
+    // Keep source offsets in UTF-16 and let TextDocument handle line endings.
     const range = new vscode.Range(document.positionAt(node.start), document.positionAt(node.end));
     const selectionRange = new vscode.Range(document.positionAt(node.start), document.positionAt(node.openingEnd));
     const kind = node.tag === 'svg' ? vscode.SymbolKind.File

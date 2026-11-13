@@ -29,6 +29,45 @@ function symbols(source) {
   }, { isCancellationRequested: false });
 }
 
+for (const newline of ['\n', '\r\n']) {
+  test(`Outline selects the opening tag and retains container extent with ${JSON.stringify(newline)} lines`, () => {
+    const lines = ['<!-- 😀 引导注释 -->', '<svg>', '  <g', '    id="flow">',
+      '    <!-- <rect id="fake"/> -->', '    <rect id="start" data-note="a>b"',
+      '      width="120" height="60"/>', '    <text>开始😀</text>', '  </g>', '</svg>'];
+    const source = lines.join(newline);
+    const starts = lines.map((_, index) => lines.slice(0, index).reduce((offset, line) => offset + line.length + newline.length, 0));
+    const document = {
+      getText: () => source,
+      positionAt: offset => {
+        const line = starts.findLastIndex(start => start <= offset);
+        return { line, character: offset - starts[line] };
+      },
+    };
+    const offsetAt = position => starts[position.line] + position.character;
+    const selected = symbol => source.slice(offsetAt(symbol.selectionRange.start), offsetAt(symbol.selectionRange.end));
+    const [svg] = new SvgDocumentSymbolProvider().provideDocumentSymbols(document, { isCancellationRequested: false });
+    const group = svg.children[0];
+    const [rect, text] = group.children;
+    assert.equal(selected(group), ['<g', '    id="flow">'].join(newline));
+    assert.deepEqual(group.selectionRange.start, { line: 2, character: 2 });
+    assert.deepEqual(group.range.end, { line: 8, character: 6 });
+    assert.equal(selected(rect), ['<rect id="start" data-note="a>b"', '      width="120" height="60"/>'].join(newline));
+    assert.deepEqual(rect.selectionRange.start, { line: 5, character: 4 });
+    assert.equal(selected(text), '<text>');
+    assert.deepEqual(text.range.end, { line: 7, character: lines[7].length });
+    const contained = node => {
+      assert.ok(offsetAt(node.range.start) <= offsetAt(node.selectionRange.start));
+      assert.ok(offsetAt(node.selectionRange.end) <= offsetAt(node.range.end));
+      for (const child of node.children) {
+        assert.ok(offsetAt(node.range.start) <= offsetAt(child.range.start));
+        assert.ok(offsetAt(child.range.end) <= offsetAt(node.range.end));
+        contained(child);
+      }
+    };
+    contained(svg);
+  });
+}
+
 test('native symbol kinds distinguish SVG roots, containers, shapes and text while preserving source order', () => {
   const [svg] = symbols('<svg><g id="flow"><rect/><text><tspan>开始</tspan></text></g><defs><clipPath><path/></clipPath></defs><custom/></svg>');
   assert.equal(svg.kind, fakeVscode.SymbolKind.File);
