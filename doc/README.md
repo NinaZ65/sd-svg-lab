@@ -1,380 +1,139 @@
-# SVG 编辑器：Lab 1 项目报告
+# SVG 编辑器：Lab 1 两阶段项目报告
 
-第 1—7 节记录 `final` 对应的 Phase 1 方案与结果；它们保留当时的设计判断。第 8 节起记录 Phase 2 的实际重构状态，若两阶段的“当前实现”描述不同，以 Phase 2 小节为准。
+本项目用 TypeScript 实现 SVG 命令行编辑器，再在它的基础上实践插件开发与框架重构。第 1—7 节是 Phase 1 的精简回顾，描述 `final` 对应的历史实现；第 8 节是 Phase 2 的主体。旧工厂等历史设计不代表当前代码仍然如此。
 
-## 1. 模块划分
+Phase 2 分为两部分：先作为插件开发者使用 VSCode 的接口，再作为框架设计者为 CLI 定义扩展接口。两部分的过程、代码审查与验证均在本报告中说明。完整开发日志见 [WORKLOG.md](WORKLOG.md)，课程要求见 [Phase 1](requests/lab1/phase_cli_1.md) 和 [Phase 2](requests/lab2/phase_cli_2.md)。
 
-本项目按职责划分为命令行交互、命令、文档模型、历史管理和输入输出适配等模块。这样做的主要目的是把终端交互和核心 SVG 编辑逻辑分开，避免所有功能都集中在一个类中。
+## 1. Phase 1：模块划分
+
+Phase 1 将终端交互、编辑命令、文档状态和撤销历史分开，避免把所有逻辑放进 REPL。
+
+| 目录 | Phase 1 的职责 |
+|---|---|
+| `src/cli` | 接收输入、解析命令、查找并执行 Command。 |
+| `src/commands` | 验证参数、执行编辑或读写，保存撤销所需的信息。 |
+| `src/model`、`src/model/shapes` | 维护 SVG 树、画布、具体图形和固定图形工厂。 |
+| `src/history` | 保存 undo/redo 操作及文件读写后的撤销限制。 |
+| `src/io` | 封装控制台输入和输出；文件读写由对应命令执行。 |
+| `test`、`doc` | 保存验证用例、会话、报告和过程记录。 |
+
+以下是重构前的依赖图；Phase 2 的对应图在第 8.2 节。
 
 ```plantuml
 @startuml
-package "命令行交互" as cli {
+package "CLI" {
   [CliApp]
   [ReplLoop]
   [CommandRegistry]
 }
-
-package "命令" as commands {
-  [Command]
+package "命令" {
+  [具体 Command]
   [CommandContext]
-  [AbstractCommand]
-  [CreateCommand]
-  [MoveCommand]
-  [SetCommand]
-  [TreeCommand]
-  [ReadCommand]
-  [SaveCommand]
 }
-
-package "文档模型" as model {
+package "模型" {
   [Document]
-  [Shape]
-  [SvgCanvas]
-
-  package "图形实现与工厂" as shapes {
-    [RectShape]
-    [CircleShape]
-    [EllipseShape]
-    [LineShape]
-    [TextShape]
-    [GroupShape]
-    [ShapeFactory]
-  }
+  [ShapeFactory]
+  [Shape / GroupShape / 叶子图形]
 }
-
-package "历史管理" as history {
-  [HistoryManager]
-  [HistoryAction]
-}
-
-package "输入输出适配" as io {
-  [ConsoleInput]
-  [ConsoleOutput]
-}
-
-CliApp --> ReplLoop
-ReplLoop --> CommandRegistry
-CommandRegistry --> Command
-
-AbstractCommand ..|> Command
-Command --> CommandContext
-AbstractCommand --> CommandContext
-
-CommandContext --> Document
-CommandContext --> HistoryManager
-CommandContext --> ConsoleOutput
-
-Document --> Shape
-Document --> SvgCanvas
-Document --> ShapeFactory
-
-CreateCommand --> ShapeFactory
-MoveCommand --> Shape
-
-HistoryManager --> HistoryAction
-CommandContext --> HistoryAction
-
-Shape <|-- GroupShape
-Shape <|-- RectShape
-Shape <|-- CircleShape
-Shape <|-- EllipseShape
-Shape <|-- LineShape
-Shape <|-- TextShape
-
-ShapeFactory --> Shape
-GroupShape --> Shape
+[CliApp] --> [ReplLoop]
+[ReplLoop] --> [CommandRegistry]
+[CommandRegistry] --> [具体 Command] : 固定注册
+[具体 Command] --> [CommandContext]
+[CommandContext] --> [Document]
+[CommandContext] --> [HistoryManager]
+[CommandContext] --> [ConsoleOutput]
+[具体 Command] --> [ShapeFactory] : create
+[Document] --> [ShapeFactory] : read
+[ShapeFactory] --> [Shape / GroupShape / 叶子图形]
+[Document] --> [Shape / GroupShape / 叶子图形]
 @enduml
 ```
 
-各目录的职责如下：
+## 2. Phase 1：设计模式及理由
 
-- `src/cli`：负责终端交互、REPL 循环和命令分发。
-- `src/commands`：实现创建、移动、缩放、属性修改、删除、分组、文件读写、撤销和重做等命令。
-- `src/model`：维护 SVG 文档状态、画布信息、图形树和序列化逻辑。
-- `src/model/shapes`：实现具体图形类以及图形工厂。
-- `src/history`：维护撤销栈和重做栈。
-- `src/io`：封装控制台输入输出。
-- `doc`：保存项目报告、设计决策和开发记录。
-- `test`：保存模型测试、命令状态测试和 CLI 验收测试。
+**Command。** 每个命令实现统一接口，REPL 只负责分发。编辑成功后记录一个 `HistoryAction`：属性修改保存前后值，结构编辑保存原父节点和同级位置，移动与缩放保存局部几何状态。这样可以精确撤销，避免每一步都复制整个文档。
 
-整体依赖方向可以概括为：
+**Composite。** 普通图形和分组都实现 `Shape`。Move/Scale 调用同一个方法，分组负责递归处理子节点，命令不再逐类判断图形。
 
-```text
-CLI
- ↓
-Command
- ↓
-Model
+**Factory。** `ShapeFactory` 集中处理图形类型名到对象的转换，创建与 SVG 读回共用这一入口。它在 Phase 1 解决重复分派问题，也成为 Phase 2 需要开放的变化点。
 
-History ← Command
-IO      ← Command / CLI
-```
+## 3. Phase 1：依赖方向
 
-命令行层负责组装 `Document`、`HistoryManager` 和输出通道，并把它们放入 `CommandContext`。具体命令负责参数验证和编辑流程，真正的文档和图形状态由 Model 管理。
+CLI 可以调用命令、模型、历史和输入输出；命令可以操作模型和历史。模型不引用 CLI、具体命令、终端或文件系统，历史模块不引用具体命令。`CommandContext` 仍依赖 `ConsoleOutput`，这是当时保留的交互边界，并未声称已经实现任意界面替换。
 
-文件读写目前由 `ReadCommand` 和 `SaveCommand` 调用文件系统完成，`src/io` 主要负责控制台适配。Model 不依赖 CLI、终端或文件系统。
+## 4. Phase 1：变化点与后续风险
 
----
-
-## 2. 设计模式的选择
-
-### 2.1 Command 模式
-
-本项目要求支持 `undo/redo`，因此编辑操作采用 Command 模式比较自然。
-
-每个操作都实现统一的命令接口，并集中注册到 `CommandRegistry`。这样 REPL 只负责根据命令名找到对应 Command，而不会直接包含大量具体编辑逻辑。
-
-撤销和重做通过 `HistoryAction` 保存操作需要恢复的信息。例如：
-
-- `set` 保存修改前后的属性值；
-- 结构编辑保存原父节点和原同级位置；
-- 移动和缩放保存局部几何状态。
-
-这样做比每次复制整个 SVG 文档更轻量，也能让每个命令自己负责如何撤销自己的修改。
-
-### 2.2 Composite 模式
-
-SVG 本身就是树形结构，`<g>` 可以包含其他图形，因此项目中把 `GroupShape` 也设计成一种 `Shape`。
-
-```text
-Shape
-├── RectShape
-├── CircleShape
-├── EllipseShape
-├── LineShape
-├── TextShape
-└── GroupShape
-    └── Shape[]
-```
-
-`MoveCommand` 和 `ScaleCommand` 只调用统一的：
-
-```ts
-shape.move(...)
-shape.scale(...)
-```
-
-叶子图形修改自己的几何属性，而 `GroupShape` 负责递归对子节点执行操作。
-
-这样调用方不需要到处判断“当前目标到底是普通图形还是 Group”，也更符合 Composite 模式的设计目的。
-
-### 2.3 Factory 模式
-
-图形创建集中在 `ShapeFactory` 中。
-
-`ShapeFactory.create()` 负责从类型名创建对应图形，SVG 读入时也通过 `ShapeFactory.fromSvg()` 转换属性并复用创建逻辑。
-
-这样可以避免 `rect / circle / line ...` 的类型分派散落在 CLI、Command 和 Document 中。
-
----
-
-## 3. 依赖方向规则
-
-项目中约定以下依赖方向：
-
-- CLI 可以依赖 Command、Model、History 和 IO。
-- Command 可以依赖 Model、History 和 IO。
-- Model 不依赖 CLI、Command、控制台或文件系统。
-- History 只管理 `HistoryAction`，不依赖具体 Command。
-- IO 只负责技术层面的输入输出，不包含业务逻辑。
-
-这样做的好处是，核心图形和文档逻辑不需要启动终端就可以测试，也方便以后替换交互方式。
-
-目前仍有一个明确的边界：`CommandContext` 直接依赖 `ConsoleOutput`。如果后续真的增加 GUI 或 Agent 输入通道，可以再把输出进一步抽象成更通用的接口。Phase 1 暂时不提前做这一层扩展。
-
----
-
-## 4. 变化点假设：第三次迭代与风险识别
-
-如果项目继续演化，我认为下面几处最可能发生变化。
-
-| 未来变化 | 当前设计与后续演化 | 风险 |
-|---|---|---|
-| 新增图形，例如 `box` | 当前用 `ShapeFactory` 集中处理图形创建；后续可以演化成 Provider / Registry 注册机制。 | 创建、解析、序列化和属性设置中仍存在一定的类型知识。`box` 还涉及内部 rect/text、属性传播和 `data-kind` 读回，Phase 1 暂时不实现完整插件系统。 |
-| 新增命令 | `CommandRegistry` 已集中管理命令注册，后续可以开放给新的命令提供者。 | Parser、help 信息和 Command 实现可能出现不同步，需要进一步统一命令描述。 |
-| 文档规模变大 | 当前 `findById()` 直接遍历 SVG 树。如果后续性能测试发现查找成为瓶颈，再考虑增加辅助 id 索引。 | 索引必须和 create/delete/group/read/undo/redo 始终保持一致，否则会再次出现两份状态不一致的问题。 |
-| CLI 演化为 GUI 或 Agent | Model 和 Command 不依赖 CLI，因此新的交互通道可以复用核心逻辑。 | `CommandContext` 仍绑定控制台输出，命令参数目前也是字符串数组，未来需要进一步适配。 |
-| SVG 兼容性要求提高 | 当前读写逻辑集中在 `Document` 和 `ShapeFactory`。 | 当前解析器只覆盖本实验需要的 SVG 子集，完整 XML 转义、更多属性和第三方 SVG 兼容性仍需要额外处理。 |
-| 更复杂的编辑历史 | 当前 Command 保存旧值、父节点、位置或局部几何状态。 | 多节点操作的恢复顺序和浮点值恢复容易出错，需要继续通过具体测试完善，而不是直接改成整份 Document 快照。 |
-
-当前保留的两个集中分派点是：
-
-- 命令名 → Command
-- 图形类型名 → Shape
-
-Phase 1 不提前实现完整插件框架，等后续需求真正出现后再扩展。
-
----
-
-## 5. 过程记录
-
-### 5.1 从 Map 索引改为以 SVG 树为实际状态来源
-
-项目早期曾在 SVG 树之外再维护一个 `Map<string, Shape>`，用于快速通过 id 查找图形。
-
-在后续检查中，我发现这样会带来一个问题：SVG 树和 Map 都需要在 create、delete、group、read、undo 等操作中同时更新，一旦漏掉一个地方，就可能出现状态不一致。
-
-因此后来决定只保留 SVG 树作为实际文档状态，`findById()` 直接从树中递归查找。
-
-Phase 1 的图形数量并不大，所以这里优先选择实现简单和状态一致性，而不是提前优化查询性能。
-
-### 5.2 Git push 状态误判
-
-开发过程中曾出现一次 Git 状态判断错误。
-
-AI 根据一次 `git push` 的终端输出判断完整实现已经同步到 GitHub，但我实际打开远端仓库后发现，GitHub 上仍然只有早期的项目骨架。
-
-之后重新检查了：
-
-```text
-HEAD
-origin/main
-git status
-git log
-working tree
-```
-
-最后发现完整实现其实还没有 commit，只存在于本地工作区中。
-
-这个问题让我意识到，不能只依赖 AI 对某一次终端输出的解释。之后判断 Git 是否真正同步时，会同时检查本地提交、远端跟踪分支和工作区状态。
-
-### 5.3 自动测试通过，但人工 CLI 验收发现 parent 错误
-
-在一次完整自动测试通过后，我又手动执行了：
-
-```text
-create g flowchart
-create rect r1 ... in flowchart
-show r1
-```
-
-结果发现 `r1` 的 parent 仍然显示为根节点，而不是 `flowchart`。
-
-说明当时虽然测试通过，但实际上没有覆盖到这个具体的交互场景。
-
-随后修正了 `CreateCommand` 的插入位置，并增加了 `create ... in <container>` 的回归测试，再重新运行自动测试和真实 CLI 验收。
-
-这个问题也说明，自动测试只能证明已有测试覆盖到的行为正确，最终实际运行仍然有必要。
-
-### 5.4 最终检查发现 group 和 redo 问题
-
-后续检查中又发现了两个问题：
-
-1. `group bad r1 missing` 在发现目标不存在之前已经把 `r1` 从原位置摘掉，导致命令虽然报错，但文档状态已经变化。
-2. `set r1 x 5 → undo → redo` 后没有重新恢复成 `x=5`，说明撤销过程中修改了重做仍然需要的数据。
-
-这两个问题都先补充了能够稳定复现失败的测试，再修改实现。
-
-最终：
-
-- `group` 改为先完成全部验证，再修改树结构；
-- `set` 固定保存修改前后的值，undo 和 redo 不再互相覆盖数据。
-
-进一步检查时还发现并修正了 `addto`、`ungroup` 的位置恢复，以及部分 SVG 属性解析问题。
-
-这些修改都保留在 Git 提交历史中，详细过程见 `WORKLOG.md`。
-
----
-
-## 6. 一致性自查
-
-实现完成后，我重新检查了实际目录、import 关系和关键实现，确认当前代码与架构方案基本一致。
-
-| 抽查项 | 结果 |
+| 预期变化 | 原设计的限制与后续方向 |
 |---|---|
-| 模块职责 | `cli` 负责交互，`commands` 负责编辑流程，`model` 管理文档和图形，`history` 管理撤销重做，`io` 负责控制台适配。 |
-| Model 是否依赖 CLI | 检查 `src/model` 后，没有发现对 CLI、Command、控制台或 `node:fs` 的依赖。 |
-| Command 是否依赖 Model | Command 通过 `CommandContext` 获取 `Document`，并调用 Model 完成真正的编辑操作。 |
-| 图形创建分派 | 早期 Document 中曾存在第二套图形类型分派，后来已经统一交给 `ShapeFactory`。 |
-| 命令分发 | 命令名统一在 `CommandRegistry` 中注册，REPL 不直接执行具体业务逻辑。 |
-| id 查找 | 当前没有全局 `id → Shape` 权威 Map，`findById()` 直接遍历 SVG 树。 |
-| Composite | `MoveCommand` 和 `ScaleCommand` 不再判断具体图形类型，而是调用统一的 `Shape.move()` 和 `Shape.scale()`；Group 自己递归处理子节点。 |
-| History | `HistoryManager` 保存 `HistoryAction`，不依赖具体 Command。 |
-| 失败是否改变状态 | group、addto 等结构操作先完成验证，再修改树；撤销时恢复原父节点和原同级位置。 |
+| 新图形、新命令 | 固定工厂和命令表需要修改；Phase 2 改为提供者和注册表。 |
+| 文档增大 | `findById()` 遍历整棵树；先保证状态一致，有性能证据后再考虑索引。 |
+| 更广的 SVG 兼容性 | 解析器仅支持课程子集，不能直接当作完整 XML 或 SVG 实现。 |
+| 更复杂的历史与界面 | 多节点恢复顺序、浮点状态和输出依赖需要具体测试，不能仅靠增加抽象类解决。 |
 
-检查过程中也发现，早期实现并不完全符合最初设计，例如曾存在 Map 索引、重复的 Shape 创建分派，以及 Move/Scale 在命令层判断具体类型的问题。这些后来都进行了修正。
+## 5. Phase 1：代表性过程记录
 
-当前仍保留一些 Phase 1 暂不继续抽象的地方，例如：
-
-- SVG 序列化和 `SetCommand` 中仍存在少量类型判断；
-- 部分几何字段仍直接暴露；
-- `CommandContext` 仍绑定控制台输出。
-
-这些属于后续迭代可以继续改进的边界，本阶段不再继续扩大重构范围。
-
----
-
-## 7. 质量保证手段
-
-项目统一使用：
-
-```bash
-npm test
-```
-
-作为主要验证入口，包括 TypeScript 编译、CLI 冒烟测试、Phase 1 功能验收以及 Model / Command 的自动测试。
-
-主要覆盖可以分为四类：
-
-| 验证方式 | 主要内容 |
+| 发现的问题 | 如何确认与纠正 |
 |---|---|
-| 编译与 CLI 冒烟测试 | TypeScript 编译、程序启动、提示符、`help` 和退出流程。 |
-| Phase 1 功能验收 | 创建、指定容器创建、group、move、scale、set、undo/redo、save/read、错误处理等真实 CLI 行为。 |
-| Model / Command 自动测试 | 树查找、失败不改变状态、父节点和同级位置恢复、Composite 行为、Factory 创建、序列化往返和历史恢复。 |
-| 人工 CLI 验收 | 实际执行典型操作，重点检查 Group 的整体移动、parent 归属、undo/redo、IO barrier 和保存后的 SVG。 |
+| 树外另有一份 id Map，编辑时容易不同步 | 检查 create/delete/group/read/undo 的更新路径后，改为以 SVG 树作为文档状态来源。 |
+| AI 曾误判完整代码已推送 | 人工查看 GitHub 后交叉核对提交、远端跟踪引用和工作区，发现完整修改尚未提交；后续按实际引用核验同步。 |
+| 自动测试通过，人工执行 `create ... in flowchart` 却显示错误 parent | 修正插入位置并增加指定容器创建的回归测试，说明测试通过不能替代具体场景检查。 |
+| group 报错后已摘走部分节点；set 的 redo 值被 undo 覆盖 | 先补可复现测试，再改为结构编辑先验证、属性历史固定保存前后值；同类检查延伸到 addto/ungroup。 |
 
-最终修复后：
+这些记录描述实际出现的问题；详细复现与提交沿革保存在 [开发日志](WORKLOG.md)。
 
-```text
-Node.js 自动测试：32 项通过，0 失败
-CLI 测试脚本：执行成功
-```
+## 6. Phase 1：一致性自查
 
-另外，开发过程中发现的 bug 都尽量补充了回归测试。例如：
+在 `final` 所对应的阶段，目录与第 1 节的职责基本一致。检查中曾发现重复图形分派、额外 Map 索引和命令按具体类型处理移动/缩放，后来分别集中到工厂、移除重复状态并交给 Shape 多态处理。
 
-- `create ... in` 的 parent 错误；
-- group 失败后状态被部分修改；
-- set 的 redo 状态错误；
-- addto / ungroup 的结构恢复问题。
+仍保留的边界是少量类型判断、部分直接暴露的几何字段以及控制台输出依赖；其中图形创建和字段封装在 Phase 2 继续调整。Phase 2 的目录与依赖检查见第 8.10 节，不用当前代码反推旧工厂仍然存在。
 
-需要说明的是，现有测试并不是对所有 SVG 或所有边界情况的完整证明。例如当前 SVG parser 只覆盖 Phase 1 需要的子集，IO barrier 也没有穷举所有组合。
+## 7. Phase 1：质量保证
 
-因此本项目仍保留人工 CLI 验收，并在实际发现新问题后补充对应的回归测试，而不是简单把“测试通过”理解为所有行为都已经完全正确。
+Phase 1 收尾时，TypeScript 编译、CLI 冒烟、课程功能验收脚本和 32 项 Node 自动测试通过。测试重点是失败后状态不变、父子关系和同级位置恢复、反复 undo/redo、六种图形的读写往返；人工 CLI 验收还发现过自动测试遗漏的 parent 问题。
+
+这些结果是历史验收记录。当前兼容性通过从 Git 的 `final` 对象重新构建 CLI、与 Phase 2 禁用可选插件后的输出逐字节比较来确认，方法和本轮结果见第 8.11 节。
 
 ---
 
 ## 8. Lab 1 Phase 2：插件实践与重构
 
-课程原文见 [Phase 2 要求](requests/lab2/phase_cli_2.md)，事先确认的设计边界见 [项目规约](PHASE2_SPEC.md) 和 [工作规范](PHASE2_WORK_RULES.md)。本节描述实际落地结果，而不是把课程示意输出当作程序运行输出。
+课程原文见 [Phase 2 要求](requests/lab2/phase_cli_2.md)，事先确认的设计边界见 [项目规约](PHASE2_SPEC.md) 和 [工作规范](PHASE2_WORK_RULES.md)。本阶段同时完成“使用宿主提供的接口”和“设计供别人使用的接口”两项实践。VSCode 扩展与 CLI 使用 TypeScript 类、接口和对象组合实现；AI 辅助生成方案与代码，实际是否符合要求由源码审查、测试和运行证据核对，代表性检查与修正在第 8.9 节。
 
-### 8.1 VSCode 扩展实践
+### 8.1 第一部分：作为 VSCode 插件开发者
 
-扩展源码、示例和启动步骤在 [vscode-extension](../vscode-extension/README.md)。`SvgFileDecorationProvider.provideFileDecoration()` 仅对真实的 `.svg` 文件返回 badge `[]`；它不重命名、不写入文件，名字以 `.svg` 结尾的目录也不标记。`SvgDocumentSymbolProvider.provideDocumentSymbols()` 从当前文本重新生成带范围的嵌套 `DocumentSymbol`，名称为标签名或 `标签名#id`，由 VSCode 原生 Outline 绘制和定位。`SvgOutlineParser.parse()` 遇到未闭合或不匹配的标签时返回空列表，编辑过程中不会因解析异常使扩展崩溃。
+这一部分先学习已有宿主怎样接纳扩展，再实现文件标记和 SVG 大纲。实际开发说明了一个重要边界：扩展负责回答“这个文件显示什么标记”“这段源码有哪些元素”，VSCode 负责何时询问、怎样展示和怎样跳转。插件并不自己绘制一个资源管理器或替换原生大纲。
 
-VSCode 提供 Explorer、Outline、文档变化调度和源码定位；插件在 `extension.activate()` 中注册两个提供者。之后由 VSCode 在需要展示某个 URI 或重算当前文档符号时调用提供者，插件只交回元数据和源码范围。实现依据为 [VSCode 文件装饰与文档符号 API](https://code.visualstudio.com/api/references/vscode-api)；实际开发窗口的观察和截图保存在 [doc/evidence/lab2](evidence/lab2/README.md) 作为界面验收证据。当前自动测试验证了嵌套分组、无 id、编辑后重新解析、不完整 XML、文件与目录区分以及源码选择范围。
+**注册与调用过程。** 扩展宿主提供运行环境，在扩展启动时调用 `extension.activate(context)`。其中实例化 `SvgFileDecorationProvider`、`SvgDocumentSymbolProvider` 两个类，分别调用 `registerFileDecorationProvider()`、`registerDocumentSymbolProvider()`；注册返回的释放对象存入 `context.subscriptions`，由宿主管理生命周期。
 
-| 模式 | 对应关系 | 关键差异 |
-|---|---|---|
-| 经典 Decorator | 文件标记给原 Explorer 项增加显示信息，保留原文件内容与名字。 | 插件没有包裹文件对象，也不替代其接口；它提供一份独立的 `FileDecoration`，由 VSCode 合成界面，因此只是装饰效果上的对应。 |
-| Adapter | 文件标记把 URI 和文件系统类型转成 VSCode 可消费的 badge 元数据；`NodeDirectoryAdapter` 把 Node `Dirent` 转成 `DirectoryAccess` 的统一条目。 | 文件标记主要是 VSCode 的 provider 回调，不是一个必须包裹旧对象的经典对象适配器；`dir` 的端口与 Node 适配器则有明确的目标接口和被适配者。 |
+随后，Explorer 需要装饰 URI 时回调 `provideFileDecoration(uri)`，大纲需要更新时回调 `provideDocumentSymbols(document, token)`。前者确认实际文件类型后返回 `[]`，后者把当前文本转换为嵌套的 `DocumentSymbol`。源码范围由插件提供，选择和滚动由 VSCode 执行；编辑后宿主重新请求符号，遇到不完整 XML 时提供者返回空列表。
 
-Phase 1 的 `Document.deserializeSvg()` 以编辑模型为目标，解析的是有限 SVG 子集，且不保存源码偏移；直接复用于 Outline 会失去点击定位所需的范围，并把编辑器模型和文件读写语义带入扩展。因此扩展独立解析文本结构。Phase 1 的 Composite 树遍历思路可用于理解层级，但其形状对象不与 VSCode 的 `DocumentSymbol` 共用；两端保持不同的输入与职责。
+**文件装饰与设计模式。** 经典 Decorator 通常与被装饰对象实现同一接口，内部持有该对象，并把原有调用转交给它。本项目的提供者实现的是 VSCode 的 `FileDecorationProvider` 接口，返回 `FileDecoration` 数据；它没有持有一个“原文件对象”并转发文件读写。实际组合关系是：VSCode 持有注册的提供者，把它返回的 badge 与原 Explorer 项一起显示。因此它有“叠加显示信息”的装饰效果，但不是经典对象包装器。文件名和内容始终由原文件系统保持。
 
-### 8.2 重构前后模块依赖
+从 Adapter（适配器）角度看，提供者把 URI、文件类型等信息转换为 VSCode 需要的显示数据，具有接口衔接作用。不过这里只是回调和数据转换，没有包装一个不兼容旧对象来转发同一组操作，不能仅因实现了接口就认定完全等同于经典 Adapter。第二部分的 `DirCommand → DirectoryAccess ← NodeDirectoryAdapter → Node fs` 才有明确的目标接口、对象注入和被适配者，见第 8.5 节。
 
-Phase 1 的详细组件图在第 1 节；其中 `Document` 与 `CreateCommand` 依赖固定的 `ShapeFactory`，`CommandRegistry` 直接构造所有命令。重构前的关键依赖可简化为：
+**Phase 1 代码能否复用。** 逐一评估后，扩展没有直接引用 CLI 的运行代码：
 
-```plantuml
-@startuml
-[CliApp] --> [CommandRegistry]
-[CommandRegistry] --> [具体命令]
-[CreateCommand] --> [ShapeFactory]
-[Document] --> [ShapeFactory]
-[ShapeFactory] --> [六种图形类]
-@enduml
+| 既有内容 | 评估与选择 |
+|---|---|
+| `Document.deserializeSvg()` | 服务于可编辑模型，只覆盖有限 SVG 子集，未保留标签偏移。直接复用无法精确定位源码，还会把内置图形注册和文档状态带入扩展。大纲另用 `SvgOutlineParser` 保存源码范围。 |
+| `Shape`、`GroupShape` | 负责几何修改、结构约束和序列化；大纲需要的是标签、id、显示摘要及源码范围。强行共用会增加编辑器侧不需要的状态。 |
+| 树遍历 | 深度遍历和递归构造子节点的思路可复用，但具体对象不同：CLI 遍历 Shape，大纲递归转换 SvgElement。复用的是方法，不声称已经共用同一个模块。 |
+
+**源码、启动与演示。** 源码在 [vscode-extension/src](../vscode-extension/src/extension.ts)，示例为 [example.svg](../vscode-extension/examples/example.svg)，完整启动步骤见 [扩展 README](../vscode-extension/README.md)。在仓库根目录安装锁定依赖并构建后，可用开发宿主运行，不要求先打包安装 VSIX：
+
+```bash
+npm ci
+npm run build:vscode
+code --new-window --extensionDevelopmentPath="$PWD/vscode-extension" "$PWD/vscode-extension/examples"
 ```
 
-Phase 2 的依赖方向：
+Explorer 应只给 SVG 文件显示 `[]`；以文本编辑器打开示例，展开大纲后点击 `rect#start` 应定位第 4 行。编辑器默认关联需要为文本编辑器，避免跳到图片预览。实际的 [文件标记截图](evidence/lab2/vscode-svg-badge.png) 与 [大纲定位截图](evidence/lab2/vscode-svg-outline.png) 已提交；它们记录原版界面，新摘要、图标与悬浮提示的版本范围见 [证据说明](evidence/lab2/README.md)。自动测试还覆盖嵌套、无 id、编辑更新、不完整 XML 和源码范围，不能拿自动测试冒充新的人工截图。API 依据见 [VSCode 官方文档](https://code.visualstudio.com/api/references/vscode-api)。
+
+### 8.2 第二部分：作为 CLI 框架设计者
+
+第一部分使用 VSCode 已定义的接口；这一部分转为定义稳定接口，让新的图形、命令、树标签和属性语义可以追加。目标是新增插件时修改装配位置，而不把新类型判断塞回 Document、Set 或 Tree 命令。
+
+重构前的图在第 1 节：工厂和命令表知道全部具体类型。下面是重构后的图：领域代码只按接口调用，默认实现和可选插件通过外层装配接入。图中的“内核”按职责划分，部分公开接口仍沿用旧目录，实际路径见第 8.10 节。
 
 ```plantuml
 @startuml
@@ -382,8 +141,9 @@ package "装配处 src/host" {
   [CodeAssembly]
   [ConfigLoader]
   [PluginActivator]
+  [Assembly]
 }
-package "内核 src/core + src/model" {
+package "内核与公开契约（实际路径见 8.10）" {
   [ShapeProvider]
   [Command]
   [TreeDecorator]
@@ -392,7 +152,7 @@ package "内核 src/core + src/model" {
   [Document]
   [Shape]
 }
-package "默认实现 src/builtin + src/commands" {
+package "默认实现（含沿用旧路径的实现类）" {
   [六种 ShapeProvider]
   [Phase 1 命令]
 }
@@ -402,6 +162,14 @@ package "可选插件 plugins" {
   [box]
   [tree-star]
 }
+[CodeAssembly] --> [Assembly]
+[ConfigLoader] --> [Assembly]
+[Assembly] --> [六种 ShapeProvider] : 注册默认实现
+[Assembly] --> [Phase 1 命令] : 注册默认实现
+[CodeAssembly] --> [stats]
+[CodeAssembly] --> [dir]
+[CodeAssembly] --> [box]
+[CodeAssembly] --> [tree-star]
 [CodeAssembly] --> [PluginActivator]
 [ConfigLoader] --> [PluginActivator]
 [PluginActivator] --> [ShapeProvider]
@@ -421,16 +189,16 @@ package "可选插件 plugins" {
 @enduml
 ```
 
-`src/model/shapes/GroupShape.ts` 是公开的 Composite 容器抽象；其余五种叶子实现虽沿用 Phase 1 路径，已由 `src/builtin/shapes/` 的提供者装配。插件可以使用 `Shape`、`GroupShape`、`CommandContext` 及扩展接口，不导入内置叶子类、宿主或其他插件。`CodeAssembly.ts` 是代码装配唯一需要改的入口；配置加载器不含任何插件名称分支。
+`src/model/shapes/GroupShape.ts` 是公开的 Composite 容器抽象；其余五种叶子实现虽沿用 Phase 1 路径，已由 `src/builtin/shapes/` 的提供者装配。插件可以使用 `Shape`、`GroupShape`、`CommandContext` 及扩展接口，不导入内置叶子类、宿主或其他插件。`CodeAssembly.ts` 是代码装配唯一需要改的入口；配置加载器不含任何插件名称分支。图中的实现箭头表示各包中相应的 Command、Provider、Handler、Decorator 类实现接口，并不是整个插件包只有一个对象。
 
 ### 8.3 四个扩展点清单
 
 | 扩展点接口及职责 | 内核调用位置 | 已有实现 | 关闭可选插件后的行为 | 违反契约的处理 |
 |---|---|---|---|---|
-| `ShapeProvider`：创建及读回一种图形 | `ShapeRegistry.create()/read()`，由 `Document.makeShape()/deserializeSvg()` 调用 | 六种内置提供者，`BoxProvider` | 六种原有图形可用；`create box` 报未知类型，带 `data-kind="box"` 的 `<g>` 降级为普通组 | 重名拒绝注册；创建返回错误 id/类型时报 `invalid shape provider`；读回异常使整次读取失败且旧文档保留 |
-| `Command`：提供命令名、帮助文案与执行行为 | `CommandRegistry.execute()`；`HelpCommand.execute()` 枚举可用命令 | Phase 1 内置命令；独立插件 `StatsCommand`、`DirCommand` | 两个新增命令均报 `unknown command`，`help` 无它们 | 重名拒绝注册；执行抛错报 `command failed: ...`，REPL 继续运行 |
-| `TreeDecorator`：给结构树标题行追加标签 | `TreeDecoratorRegistry.decorate()`，由 `TreeCommand.execute()` 调用 | `BoxTypeDecorator`、`ModifiedStar` | 不追加任何标签；Lab 1 树输出逐字节不变 | 重名拒绝注册；抛错或返回非字符串时报 `tree decorator failed: ...` |
-| `AttributeHandler`：定义某图形的属性修改语义 | `AttributeRegistry.matching()` 与 `SetCommand.execute()` | `BoxAttributeHandler` 处理 box 的 `fill`/`label` | 默认仍按图形自身允许属性处理；未知属性报 `unknown attribute` | 重名拒绝注册；同时命中拒绝执行；部分修改后抛错由 `AttributeTransaction.rollback()` 恢复，历史不变 |
+| [ShapeProvider](../src/core/ShapeProvider.ts)：创建及读回一种图形 | [ShapeRegistry.ts](../src/core/ShapeRegistry.ts) 的 `create()/read()`，由 [Document.ts](../src/model/Document.ts) 的 `makeShape()/deserializeSvg()` 调用 | 六种内置提供者，`BoxProvider` | 六种原有图形可用；`create box` 报未知类型，带 `data-kind="box"` 的 `<g>` 降级为普通组 | 重名拒绝注册；创建返回错误 id/类型时报 `invalid shape provider`；读回异常使整次读取失败且旧文档保留 |
+| [Command](../src/commands/Command.ts)：提供命令名、帮助文案与执行行为 | [CommandRegistry.ts](../src/cli/CommandRegistry.ts) 的 `execute()`；[HelpCommand.ts](../src/commands/HelpCommand.ts) 的 `execute()` 枚举可用命令 | Phase 1 内置命令；独立插件 `StatsCommand`、`DirCommand` | 两个新增命令均报 `unknown command`，`help` 无它们 | 重名拒绝注册；执行抛错报 `command failed: ...`，REPL 继续运行 |
+| [TreeDecorator](../src/core/TreeDecorator.ts)：给结构树标题行追加标签 | [TreeDecoratorRegistry.ts](../src/core/TreeDecoratorRegistry.ts) 的 `decorate()`，由 [TreeCommand.ts](../src/commands/TreeCommand.ts) 的 `execute()` 调用 | `BoxTypeDecorator`、`ModifiedStar` | 不追加任何标签；Lab 1 树输出逐字节不变 | 重名拒绝注册；抛错或返回非字符串时报 `tree decorator failed: ...` |
+| [AttributeHandler](../src/core/AttributeHandler.ts)：定义某图形的属性修改语义 | [AttributeRegistry.ts](../src/core/AttributeRegistry.ts) 的 `matching()` 与 [SetCommand.ts](../src/commands/SetCommand.ts) 的 `execute()` | `BoxAttributeHandler` 处理 box 的 `fill`/`label` | 默认仍按图形自身允许属性处理；未知属性报 `unknown attribute` | 重名拒绝注册；同时命中拒绝执行；部分修改后抛错由 `AttributeTransaction.rollback()` 恢复，历史不变 |
 
 注册先暂存，再比较清单及已有注册；成功才发布。一个插件激活失败不会留下它的任一注册，已成功插件和后续插件照常工作。插件的 `activate()` 契约限定为注册扩展；加载器无法撤销插件自行写入外部文件等不受管理的副作用。
 
@@ -450,6 +218,15 @@ package "可选插件 plugins" {
 ```
 
 运行 `node dist/src/cli/CliApp.js` 使用代码装配，`node dist/src/cli/CliApp.js --config plugins.config.json` 使用配置装配，`--no-plugins` 仅启用默认能力。配置无效时输出 `error: invalid plugin config` 并以默认能力启动；模块不存在、无默认导出、声明与注册集合不一致、激活抛错及重复注册分别按要求输出明确错误。`ConfigLoader` 的模块求值失败单独归入激活失败，不误报为顶层模块不存在。加载器没有硬编码具体插件导入、名称映射或类型分支。
+
+| 加载失败 | 对用户的反馈（均以 `error:` 开头） |
+|---|---|
+| 顶层模块找不到 | `plugin not found: <module>` |
+| 没有默认导出 | `plugin has no default export: <module>` |
+| 清单与实际注册不符 | `plugin manifest mismatch: <name> (declared: …, registered: …)` |
+| 模块求值或激活抛错 | `plugin failed to activate: <name> (<reason>)` |
+| 同类同名重复 | `duplicate registration: <category>/<name>` |
+| 配置语法或结构错误 | `invalid plugin config` |
 
 ### 8.5 `stats`、`dir` 与 `box`
 
@@ -474,16 +251,15 @@ package "可选插件 plugins" {
 
 **ADR 4：清单校验时机。** 可选方案是边激活边公开注册，或先暂存后校验。本项目先将所有注册暂存在本次激活上下文；检查重复名与 `contributes` 四类名称集合后才逐类发布。因此清单不一致、重复或激活抛错不会污染已有注册。插件激活顺序由配置数组决定，失败后继续加载下一项。
 
-### 8.7 过程、验收与指标
+### 8.7 过程节点与指标
 
-开发过程按普通提交推进：`68cce65` 建立 VSCode 扩展；`334f72e` 建立四个扩展点及六种默认图形提供者；`9108a13` 接入独立 `stats`、`dir` 插件；`0fb561a` 只新增 box 插件、修改一个顶层装配文件并加入测试；`16b1237` 只改配置和测试，验证第二种装法；`1162d7f` 新增 dirty 标签。`7c32892` 记录了对 box 插件直接依赖内置叶子类的审查修正，最终改为只使用公开 `Shape` API。具体发现、修正与测试见 [开发记录](WORKLOG.md)。
+开发按普通提交推进：`68cce65` 建立扩展，`334f72e` 建立四个扩展点并产出首轮指标，`9108a13` 接入 stats/dir，`0fb561a` 和 `16b1237` 分别验证 box 的代码/配置装配，`1162d7f` 接入星号标签。审查与后续修正继续保留为普通提交，没有改写这些历史。
 
-`git diff --name-status 0fb561a^ 0fb561a` 只列出 `plugins/box/`、`src/host/CodeAssembly.ts` 和对应测试；`git diff --name-status 16b1237^ 16b1237` 只列出 `plugins.config.json` 与测试。排除新插件包后，box 代码装配提交对 `src/core`、`src/model`、`src/commands`、`src/cli` 及既有插件的差异为空；这些路径在该提交的父版本中均存在。配置加载器仅动态解析配置中的模块，未增加 box 条件分支。
+代码装配的 box 接入提交只新增插件包、修改 `CodeAssembly.ts` 和加入测试；配置装配的接入提交只改配置与测试。本轮重新检查了父版本目录确实存在，再对内核和既有插件执行差异检查，结果为空。tree-star 允许修改顶层装配与配置，对内核和渲染命令的差异同样为空。具体复核命令见 [抽查记录](evidence/lab2/quality-audit.md)。
 
-验收会话及预期输出见 [doc/transcript](transcript/README.md)。`scripts/verify-transcripts.js` 从 `final` Git 对象编译出基线，对比关闭可选插件时的原始输出；再对 Lab 1 会话、box 会话、`stats/dir` 会话分别比较代码装配与配置装配的原始输出，三组均逐字节一致。`npm test` 包含 CLI 冒烟、Phase 1 回归、插件独立与失败路径测试、VSCode 解析与提供者测试。指标在 [docs/metrics](../docs/metrics/summary.md)；脚本从 Git 对象计算文件清单、分类行数和复杂度增量，VSCode 扩展单独列出。
+[指标目录](../docs/metrics/README.md) 保存从 Git 对象生成的文件清单、职责、分类行数与复杂度估算；脚本为 [generate-metrics.js](../scripts/generate-metrics.js)，测试、依赖和构建产物排除，VSCode 扩展单列。当前摘要对照 `final` 与 `main`，CLI 分类行数为内核 764、装配处 315、插件 1601；扩展为 5 个源码文件、189 行。数字来自脚本，不能代替功能验证。
 
-用户在图形桌面的扩展开发窗口已实际观察到：只有 SVG 文件带 `[]`；Outline 展示嵌套分组、无 id 文本节点和叶子节点；点击 `rect#start` 后源码定位在第 4 行。首次演示时，VSCode 的 SVG 图片预览默认关联使点击跳到预览；示例工作区已在提交 `2c15ac9` 中设置 SVG 默认使用文本编辑器，重新演示后定位成功。原始截图见 [文件标记](evidence/lab2/vscode-svg-badge.png) 和 [大纲定位](evidence/lab2/vscode-svg-outline.png)；截图中可见文件类型对照、嵌套大纲与第 4 行定位。编辑后更新与不完整 XML 的安全处理另由自动测试验证。
-
+课程最终要求对比 `final` 与 `p2`。现有本地 `p2` 仍在 `92bf1f2`，尚未包含后续细节；按用户要求暂不移动或发布。`files-p2.tsv` 是该版本历史快照，当前 `files-main.tsv` 是分支快照。因此当前数据不能冒充已完成最终 tag 的交付，后续标记安排确定后还需重新生成并核验。
 
 ### 8.8 现有功能的细节设计（2026-11-13）
 
@@ -500,6 +276,71 @@ package "可选插件 plugins" {
 
 原生 detail、kind、range 和 selectionRange 的职责依据 [VSCode DocumentSymbol API](https://code.visualstudio.com/api/references/vscode-api#DocumentSymbol)。摘要颜色、图标外观、选中和滚动效果由 VSCode 主题与原生视图处理，插件不固定配色或替换 Outline。
 
-本轮验证为 CLI 52 项、VSCode 11 项自动测试通过，另有命令行冒烟及 Phase 1 验收脚本成功。`final` 与关闭可选插件的基础会话，以及代码/配置装配的三组会话继续逐字节一致。源码定位的真实 GUI 截图仍是优化前的证据；新增摘要、图标和悬浮提示尚未补录新界面截图，不将单元测试或 SVG 浏览器预览写成 VSCode 实机演示。
+这轮细节优化的源码、测试和说明分六个普通提交完成。最新测试结果统一见第 8.11 节；新增界面细节尚未补录新截图，保留旧图并注明版本。
 
-用户要求暂缓 tag，因此现有本地 `p2` 保留在 `92bf1f2`，不移动也不发布。当前指标使用 `node scripts/generate-metrics.js final main` 对照当前分支；CLI 三类指标未变，VSCode 单独更新为 5 个源码文件、189 行，排除声明文件和测试。原 `files-p2.tsv` 保留为历史快照，不能代表本轮分支源码。
+### 8.9 过程记录：怎样检查并修正 AI 的建议
+
+**接口能用，不代表依赖正确。** AI 最初生成的 box 插件可以通过功能测试，但直接导入了内置 `RectShape`、`TextShape`。检查 import 后确认，这违反了“插件只依赖公开领域接口”的方案。提交 `7c32892` 改为通过 `PluginContext.createShape()` 创建子部件，box 只通过 Shape 的公开方法操作它们，再重跑读回、属性、配置和会话测试。这里暴露的是结构问题，单看输出正确无法发现。原 box 接入提交与后续修正都保留在历史中。
+
+**报错也要验证，而不只验证成功路径。** 对残缺 box，模型已经能拒绝读入，但 CLI 的笼统反馈不便区分读取失败与内容错误。审查后在 `e6619b7` 补充具体原因，并用真实临时文件通过 ReadCommand 验证：报错可见，旧文档和历史保持不变。错误契约由实际测试支撑，不能只写在 ADR 中。
+
+**大纲测试通过，实际点击仍可能不对。** 最初环境无法直接读取图形桌面，先依据 API 实现并做模拟测试。用户后来在扩展开发窗口发现：大纲树存在，点击却切到 SVG 图片预览。检查确认问题在文件的默认编辑器关联；`2c15ac9` 为示例工作区设置文本编辑器并补充说明。用户重新操作后，截图显示选中 `rect#start` 且源码停在第 4 行。它说明宿主设置与用户实际操作同样属于验收，模拟 API 测试不能覆盖全部界面行为。
+
+**创新建议也需要收敛范围。** AI 起初建议变更清单、对齐等新功能，用户明确只要已有功能的细节。之后改为六个独立提交，完善摘要、角色图标、定位验证、标记提示、示例视觉和报告说明。定位范围本来正确，因此补充回归验证，没有为了产生代码差异重写算法。选择理由在第 8.8 节。
+
+**本轮抽查先于报告修订。** 按用户要求，从 `49c7a48` 的代码开始检查。原测试通过后，发现两个尚未直接覆盖的组合：dir 成功或失败时，已有 redo 是否保留；处理器改过多个子部件和同一属性后抛错时，是否仍能恢复且保留 redo。补两项测试后均通过，抽查与证据先提交为 `36dab48`，再修订报告。此次没有复现新功能错误，如实记录为覆盖补强，不写成“修复了两个 bug”。
+
+### 8.10 一致性自查：目录和依赖是否符合方案
+
+**模块划分：职责符合方案，实际目录沿用了部分 Phase 1 路径。** 新增 `src/core`、`src/builtin`、`src/host`、`plugins`、`vscode-extension` 已按方案落地，但没有为了目录整齐把旧类全部搬走。以下差异在本节明确记为修订说明：
+
+| 实际位置 | 架构中的角色与沿用理由 |
+|---|---|
+| `src/core`，以及 `src/model/Document.ts`、`Shape.ts`、`shapes/GroupShape.ts` | 扩展契约、注册表、领域状态及公开容器抽象；不是所有模型目录下的类都算插件可依赖的公开 API。 |
+| `src/commands/Command.ts`、`CommandContext.ts` | Command 接口与公开上下文沿用旧路径；具体命令则是默认实现。不能只看目录名判断二者属于同一层。 |
+| `src/cli/CommandRegistry.ts` | 仍放在 CLI 目录，但负责统一注册和分发，不再固定构造具体命令。宿主使用它装配，插件不导入它。 |
+| `src/builtin/shapes/` 与旧 `src/model/shapes/` 的五种叶子类 | 提供者新增在 builtin，原有叶子类保留旧路径，由提供者装配。可选插件不直接导入这些实现类。 |
+| `src/host`、`plugins/*`、`vscode-extension` | 分别承担启动装配、可选扩展和编辑器实践；插件互不导入，编辑器扩展也不引用 CLI 模型。 |
+
+**依赖方向：早期 box 曾违反规则，修正后本轮抽查未再发现同类违规。** 检查脚本遍历 76 个 TypeScript 源文件的 229 处字面量模块引用，按规约检查领域层、插件公开 API、插件之间和编辑器扩展的边界；唯一动态加载位于通用 `ConfigLoader`，同时人工检查了该实现没有具体插件映射。三个实际抽样是：
+
+- `BoxProvider → ShapeProvider / Shape + 注入的 createChild`：通过公开接口创建和使用子部件，不直接引用内置叶子实现。
+- `DirCommand → DirectoryAccess ← NodeDirectoryAdapter → node:fs`：命令依赖目录接口，适配器负责技术实现。
+- `extension.activate → 两个 Provider → vscode API`：扩展与 CLI 各自运行，未引入跨端模型依赖。
+
+[检查脚本](../scripts/audit-dependencies.js)还通过三类内存错误注入核验会拒绝违规引用。它只能检查列明的静态边界，不证明所有动态调用都正确；人工抽样和行为测试提供补充。公开 API 的路径、扫描范围与限制见 [质量抽查记录](evidence/lab2/quality-audit.md)。
+
+### 8.11 质量保证手段：完整性与信心依据
+
+在修改本报告前，先完成代码抽查，再运行测试和会话比较。两套 TypeScript 配置均开启 strict；所有新增插件以类或类实例实现扩展点，领域字段与修改入口保持封装。可重复的主要命令是：
+
+```bash
+node scripts/audit-dependencies.js
+npm test
+node scripts/verify-transcripts.js
+node scripts/generate-metrics.js final main
+```
+
+验证分成四层，各自回答不同问题：
+
+| 手段 | 验证内容与本轮结果 |
+|---|---|
+| 编译与功能测试 | CLI 54 项、VSCode 11 项通过，0 失败；另有 CLI 冒烟与 Phase 1 验收脚本成功。覆盖正常操作、错误反馈、状态保持、undo/redo 与编辑中的大纲输入。 |
+| 插件与故障测试 | stats、dir、box、tree-star 可单独测试；dir 有接口替身和真实临时目录；加载器有找不到模块、无默认导出、清单不符、激活抛错、重复注册和失败回滚；属性处理有冲突与部分修改后失败的验证。 |
+| 运行会话对比 | 从 `final` Git 对象重建基线，关闭可选插件的基础会话输出逐字节一致；同样环境下的基础、box、stats/dir 三组代码/配置装配输出也逐字节一致。目录内容固定，日志不写入被列出的目录。 |
+| 源码和实际界面 | 依赖扫描、关键代码抽样和历史提交差异检查支持架构判断；两张真实 VSCode 截图证明原版标记、大纲与定位。新示例的布局另经浏览器离线渲染检查，但该预览不能代替 VSCode 截图。 |
+
+新增的两项测试还检查了历史栈非空时的行为：目录命令不改变 dirty、SVG 路径和工作目录；属性失败逆序恢复多个子部件及同一属性的重复修改，既有 redo 仍然可用。完整方法和结果见 [本轮代码抽查](evidence/lab2/quality-audit.md)。
+
+对功能完整性的判断来自“要求对应测试、会话、代码或真实界面证据”，不是仅凭测试数量。测试仍不是对全部 SVG、插件或状态组合的证明：解析器只支持声明的子集，加载器不能撤销插件自行产生的外部副作用；扩展单元测试使用模拟的 vscode 模块与最小 API 类型声明，不能证明每个宿主版本的实际界面表现。没有测得覆盖率，也不把复杂度数值当成质量评分。新增摘要、图标和悬浮提示还需补录新界面截图，最终 tag 和相应指标也尚待收尾。
+
+### 8.12 交付物核对
+
+| 课程要求 | 材料与状态 |
+|---|---|
+| 同一个远程仓库及最终 `p2` | 仓库为 `NinaZ65/sd-svg-lab`，Phase 1 的 `final` 保留。现有本地 `p2` 为前版，按用户安排暂缓发布；当前分支不是已完成最终 tag 的版本。 |
+| 两部分源码及启动材料 | [VSCode 扩展说明](../vscode-extension/README.md)、[扩展入口](../vscode-extension/src/extension.ts)、[示例 SVG](../vscode-extension/examples/example.svg)；CLI 内核、默认实现、宿主与四个插件均在同一仓库。 |
+| 正式报告 | 本文件；第 8.1 节是插件开发与模式、复用分析，第 8.2—8.6 节是 CLI 架构、扩展点、双装配及四条 ADR，第 8.9—8.11 节是过程、一致性与质量保证。 |
+| 文件清单和重构指标 | [docs/metrics](../docs/metrics/README.md) 和生成脚本已提交；当前分支与历史 p2 的数据已区分，最终 final/p2 对比尚待标记安排确定。 |
+| 独立测试、会话与证据 | [会话材料](transcript/README.md)、[截图及版本说明](evidence/lab2/README.md)、[代码质量抽查](evidence/lab2/quality-audit.md)，覆盖范围及待补项均如实注明。 |
+| 简短提交说明与旧材料 | [Phase 2 提交说明](submissions/lab1-phase2/提交说明.md)明确报告路径为 `doc/README.md`；Phase 1 的原说明和 PDF 保存在 `doc/submissions/lab1-phase1/`。 |
