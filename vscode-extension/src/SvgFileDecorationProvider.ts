@@ -6,7 +6,7 @@ export class SvgFileDecorationProvider implements vscode.FileDecorationProvider 
     try {
       const stat = await vscode.workspace.fs.stat(uri);
       if (stat.type !== vscode.FileType.File) return undefined;
-      return new vscode.FileDecoration('[]', 'SVG file');
+      return new vscode.FileDecoration('[]', 'SVG 源文件 · 可在大纲中查看元素结构');
     } catch {
       return undefined;
     }
