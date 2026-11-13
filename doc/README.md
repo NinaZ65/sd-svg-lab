@@ -107,6 +107,18 @@ Phase 2 的兼容性检查从 Git 的 `final` 对象重新构建 CLI，再与禁
 
 随后，Explorer 需要装饰 URI 时回调 `provideFileDecoration(uri)`，大纲需要更新时回调 `provideDocumentSymbols(document, token)`。前者确认实际文件类型后返回 `[]`，后者把当前文本转换为嵌套的 `DocumentSymbol`。源码范围由插件提供，选择和滚动由 VSCode 执行；编辑后宿主重新请求符号，遇到不完整 XML 时提供者返回空列表。
 
+**文件标记。** Explorer 中 `example.svg` 右侧显示 `[]`，文件名保持不变。
+
+![SVG 文件标记：Explorer 中 example.svg 右侧显示方括号标记](evidence/lab2/vscode-svg-badge.png)
+
+图 1：扩展开发窗口中的文件标记，摄于 2026-11-12。
+
+**大纲与源码定位。** 左下方大纲展示 `svg → g#flow → rect#start`，包含无 id 的 `text` 和嵌套组。点击 `rect#start` 后，右侧源码定位到第 4 行。同一张图中的 `notes.txt` 和目录均没有 `[]` 标记。
+
+![SVG 大纲定位：左侧选中 rect#start，右侧定位到第 4 行源码](evidence/lab2/vscode-svg-outline.png)
+
+图 2：扩展开发窗口中的嵌套大纲与源码定位，摄于 2026-11-12。两图记录细节优化前的界面，新增摘要、角色图标和悬浮提示未在图中展示。
+
 **文件装饰与设计模式。** 经典 Decorator 通常与被装饰对象实现同一接口，内部持有该对象，并把原有调用转交给它。本项目的提供者实现的是 VSCode 的 `FileDecorationProvider` 接口，返回 `FileDecoration` 数据；它没有持有一个“原文件对象”并转发文件读写。VSCode 持有注册的提供者，将返回的 badge 与 Explorer 项合成显示。两者的共同点是为原对象增加显示信息，差别在于这里组合的是显示数据，经典 Decorator 包装的则是对象及其调用。装饰过程不改变文件名和内容。
 
 提供者也承担了数据转换：把 URI、文件类型转换为 VSCode 的显示数据。它与 Adapter（适配器）的相似之处在于衔接接口；差别是这里通过宿主回调返回数据，没有包装旧接口对象来转发操作。CLI 中的 `NodeDirectoryAdapter` 则把 Node 文件系统 API 转换为 `DirectoryAccess`，由 `DirCommand` 通过构造参数接收，见第 8.5 节。
