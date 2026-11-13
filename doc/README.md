@@ -269,9 +269,9 @@ package "可选插件 plugins" {
 
 代码装配的 box 接入提交只新增插件包、修改 `CodeAssembly.ts` 和加入测试；配置装配的接入提交只改配置与测试。本轮重新检查了父版本目录确实存在，再对内核和既有插件执行差异检查，结果为空。tree-star 允许修改顶层装配与配置，对内核和渲染命令的差异同样为空。具体复核命令见 [抽查记录](evidence/lab2/quality-audit.md)。
 
-[指标目录](../docs/metrics/README.md) 保存从 Git 对象生成的文件清单、职责、分类行数与复杂度估算；脚本为 [generate-metrics.js](../scripts/generate-metrics.js)，测试、依赖和构建产物排除，VSCode 扩展单列。当前摘要对照 `final` 与 `main`，CLI 分类行数为内核 764、装配处 315、插件 1601；扩展为 5 个源码文件、189 行。生成方法见指标目录。
+[指标目录](../docs/metrics/README.md) 保存从 Git 对象生成的文件清单、职责、分类行数与复杂度估算；脚本为 [generate-metrics.js](../scripts/generate-metrics.js)，测试、依赖和构建产物排除，VSCode 扩展单列。交付摘要对照 `final` 与 `p2`，CLI 分类行数为内核 764、装配处 315、插件 1601；扩展为 5 个源码文件、189 行。生成方法见指标目录。
 
-课程最终要求对比 `final` 与 `p2`。现有本地 `p2` 仍在 `92bf1f2`，尚未包含后续细节，暂未移动或发布。`files-p2.tsv` 是该版本历史快照，当前 `files-main.tsv` 是分支快照。最终 tag 确定后，需要重新生成 `final` 与 `p2` 的对比数据。
+交付标记为 `p2`，正式文件清单是 `files-final.tsv` 与 `files-p2.tsv`。`files-main.tsv` 保留分支收尾时的快照。指标先从待发布源码生成，建立 tag 后使用同一命令重跑核对。
 
 ### 8.8 现有功能的细节设计（2026-11-13）
 
@@ -284,7 +284,7 @@ package "可选插件 plugins" {
 | 定位范围 | selectionRange 选中起始标签，range 包含完整元素及其子树。点击容器时可以直接修改其属性，同时保留正确的子树归属。保留原有实现，补充范围测试。 | 新增 LF/CRLF、多行标签、属性中的 >、注释假标签和中文/emoji 的行列与包含关系测试；已有真实截图证明原生导航可定位源码。 |
 | 标记提示 | `[]` 保持课程要求，悬浮提示解释它是 SVG 源文件，并指出可在大纲查看结构。提示放在已有标记上，悬浮时显示。 | 提示为“SVG 源文件 · 可在大纲中查看元素结构”；继续只对实际 SVG 文件提供装饰，不读写 SVG 内容。 |
 | 示例 SVG | 用“提交—审核—完成”表达流程，统一 160 × 64 圆角框和 100 单位间距，蓝/橙/绿表示输入/处理/完成；同时使用编号和文字，避免仅以颜色传意。 | `rect#start` 仍在第 4 行；嵌套组和无 id 文字均保留。XML、id 唯一性、大纲解析通过，独立临时 Chrome 配置离线渲染确认了中文、箭头和布局。 |
-| 材料版本 | 截图标注对应的界面版本，指标记录生成时读取的 Git 引用。 | 旧截图保留原文件；当前指标读取 `final/main`，`files-p2.tsv` 保留前版快照。 |
+| 材料版本 | 截图标注对应的界面版本，指标记录生成时读取的 Git 引用。 | 旧截图保留原文件；交付指标读取 `final/p2`，分支快照保存在 `files-main.tsv`。 |
 
 原生 detail、kind、range 和 selectionRange 的职责依据 [VSCode DocumentSymbol API](https://code.visualstudio.com/api/references/vscode-api#DocumentSymbol)。摘要颜色、图标外观、选中和滚动效果由 VSCode 主题与原生视图处理，插件不固定配色或替换 Outline。
 
@@ -330,7 +330,7 @@ package "可选插件 plugins" {
 node scripts/audit-dependencies.js
 npm test
 node scripts/verify-transcripts.js
-node scripts/generate-metrics.js final main
+node scripts/generate-metrics.js final p2
 ```
 
 验证范围和结果如下：
@@ -346,15 +346,15 @@ node scripts/generate-metrics.js final main
 
 测试使用课程定义的 SVG 子集，未测量覆盖率或大文档性能。扩展单元测试使用模拟的 vscode 模块与最小 API 类型声明，宿主版本差异仍需在 VSCode 中验证。加载器的回滚范围是注册表，不包括插件自行写入的外部文件。
 
-待补材料为新增界面细节的截图，以及最终 tag 对应的指标。
+新增摘要、图标和悬浮提示尚未补录界面截图。
 
 ### 8.12 交付物核对
 
 | 课程要求 | 材料与状态 |
 |---|---|
-| 同一个远程仓库及最终 `p2` | 仓库为 `NinaZ65/sd-svg-lab`，Phase 1 的 `final` 保留。本地 `p2` 指向前版 `92bf1f2`，暂缓发布。 |
+| 同一个远程仓库及最终 `p2` | 仓库为 `NinaZ65/sd-svg-lab`，Phase 1 的 `final` 保留。交付版本使用 `p2` 标记。 |
 | 两部分源码及启动材料 | [VSCode 扩展说明](../vscode-extension/README.md)、[扩展入口](../vscode-extension/src/extension.ts)、[示例 SVG](../vscode-extension/examples/example.svg)；CLI 内核、默认实现、宿主与四个插件均在同一仓库。 |
 | 正式报告 | 本文件；第 8.1 节是插件开发与模式、复用分析，第 8.2—8.6 节是 CLI 架构、扩展点、双装配及四条 ADR，第 8.9—8.11 节是过程、一致性与质量保证。 |
-| 文件清单和重构指标 | [docs/metrics](../docs/metrics/README.md) 和生成脚本已提交；当前分支与历史 p2 的数据已区分，最终 final/p2 对比尚待标记安排确定。 |
+| 文件清单和重构指标 | [docs/metrics](../docs/metrics/README.md) 和生成脚本随源码提交，正式指标比较 `final` 与 `p2`，VSCode 扩展单列。 |
 | 独立测试、会话与证据 | [会话材料](transcript/README.md)、[截图及版本说明](evidence/lab2/README.md)、[代码质量抽查](evidence/lab2/quality-audit.md)。 |
 | 简短提交说明与旧材料 | [Phase 2 提交说明](submissions/lab1-phase2/提交说明.md)列出报告路径 `doc/README.md`；Phase 1 的原说明和 PDF 保存在 `doc/submissions/lab1-phase1/`。 |

@@ -70,7 +70,8 @@ src/model/shapes/GroupShape.ts	内核	领域模型、历史或扩展契约	127	3
 src/model/shapes/LineShape.ts	插件	默认图形或内置命令实现	89	29
 src/model/shapes/RectShape.ts	插件	默认图形或内置命令实现	87	29
 src/model/shapes/TextShape.ts	插件	默认图形或内置命令实现	73	21
-vscode-extension/src/SvgDocumentSymbolProvider.ts	VSCode 扩展	文件标记、大纲或解析	23	8
+vscode-extension/src/SvgDocumentSymbolProvider.ts	VSCode 扩展	文件标记、大纲或解析	28	9
 vscode-extension/src/SvgFileDecorationProvider.ts	VSCode 扩展	文件标记、大纲或解析	14	4
-vscode-extension/src/SvgOutlineParser.ts	VSCode 扩展	文件标记、大纲或解析	88	29
+vscode-extension/src/SvgOutlineDetails.ts	VSCode 扩展	文件标记、大纲或解析	23	14
+vscode-extension/src/SvgOutlineParser.ts	VSCode 扩展	文件标记、大纲或解析	110	41
 vscode-extension/src/extension.ts	VSCode 扩展	文件标记、大纲或解析	14	2

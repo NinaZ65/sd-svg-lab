@@ -1,7 +1,7 @@
 # 指标生成说明
 
-`summary.md` 与文件清单由仓库根目录的 `scripts/generate-metrics.js` 从 Git 对象生成。默认比较 `final` 与 `p2`；当 `p2` 不存在时暂用 HEAD，脚本在摘要中明确实际读取的引用。指标只读取 `.ts` 源码文件，排除测试、依赖、构建产物与声明文件；VSCode 扩展单列。
+在仓库根目录运行 `node scripts/generate-metrics.js final p2`，从 Git 对象生成 `summary.md`、`files-final.tsv` 和 `files-p2.tsv`。文件清单包含职责、分类行数和复杂度估算；CLI 按内核、装配处、插件拆分，VSCode 扩展单列，测试、依赖、构建产物和声明文件排除。
 
-2026-11-13 的界面细节优化后，当前摘要使用 `node scripts/generate-metrics.js final main` 生成，对应 `files-final.tsv` 与 `files-main.tsv`。CLI 源码未改变，VSCode 扩展的增量单独更新。现有本地 `p2` 仍指向优化前提交，按用户要求不移动或发布，因此不能用它代表本轮源码。
+`p2` 尚未建立时，脚本暂用 HEAD 生成候选数据并在终端提示。源码提交后建立最终 tag，再执行同一命令，核对生成文件没有差异。
 
-`files-HEAD.tsv` 保留框架扩展点完成时的首次快照；`files-p2.tsv` 保留现有本地 `p2` 的历史快照。两者均不冒充当前分支数据。后续正式交付的 tag 安排由用户另行决定。
+`files-HEAD.tsv` 是框架扩展点完成时的首次快照，`files-main.tsv` 是细节优化后的分支快照，保留供过程追溯。正式交付对比使用 `files-final.tsv` 与 `files-p2.tsv`。
