@@ -140,3 +140,30 @@ test('partial attribute handler failure rolls back and conflicting handlers do n
   assert.equal(app.document.serializeSvg(), before);
   assert.equal(app.history.getUndoDepth(), depth);
 });
+
+test('failed multi-part box edits roll back repeated writes and preserve an existing redo action', () => {
+  const app = setup();
+  app.run('create box n1 1 2 80 40 title', 'set n1 label kept-redo', 'undo');
+  const box = app.document.findById('n1') as BoxShape;
+  const before = app.document.serializeSvg();
+  const depth = app.history.getUndoDepth();
+  app.assembly.attributes.register({
+    name: 'audit-failure',
+    handles: (shape, attr) => shape === box && attr === 'audit',
+    apply: (_shape, _attr, _value, transaction) => {
+      transaction.set(box.getRect(), 'fill', 'red');
+      transaction.set(box.getLabel(), 'text', 'partial');
+      transaction.set(box.getRect(), 'fill', 'orange');
+      throw new Error('multi-part failure');
+    },
+  });
+  app.run('set n1 audit ignored');
+  assert.equal(app.output.lines.at(-1), 'error: multi-part failure');
+  assert.equal(app.document.serializeSvg(), before);
+  assert.equal(app.history.getUndoDepth(), depth);
+  assert.equal(app.history.canRedo(), true);
+  app.run('redo');
+  assert.equal(box.getLabel().readAttribute('text'), 'kept-redo');
+  app.run('undo');
+  assert.equal(app.document.serializeSvg(), before);
+});

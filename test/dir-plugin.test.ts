@@ -11,6 +11,8 @@ import { CommandContext } from '../src/commands/CommandContext';
 import { HistoryManager } from '../src/history/HistoryManager';
 import { Document } from '../src/model/Document';
 import { ConsoleOutput } from '../src/io/ConsoleOutput';
+import { CommandHarness } from './CommandHarness';
+import { ModifiedStar } from '../plugins/tree-star/src/ModifiedStar';
 
 class CaptureOutput extends ConsoleOutput {
   public readonly lines: string[] = [];
@@ -76,4 +78,37 @@ test('dir gives byte-identical output in code and config assemblies', () => {
     assert.equal(code.stdout, configured.stdout);
     assert.match(code.stdout, /\[DIR\]  docs/);
   } finally { rmSync(path, { recursive: true, force: true }); }
+});
+
+test('dir success and failure preserve a populated redo history, dirty state, SVG path and cwd', () => {
+  const harness = new CommandHarness();
+  harness.run('create rect keep 0 0 10 10');
+  const star = new ModifiedStar();
+  star.onBaseline(harness.document);
+  harness.run('set keep x 5', 'set keep x 7', 'undo');
+  harness.document.setLastPath('/unchanged.svg');
+  const context = new CommandContext(harness.document, harness.history, harness);
+  const before = harness.document.serializeSvg();
+  const depth = harness.history.getUndoDepth();
+  const cwd = process.cwd();
+  assert.equal(star.label(null, harness.document), ' *');
+  for (const fail of [false, true]) {
+    const access: DirectoryAccess = { list: path => {
+      assert.equal(path, cwd);
+      if (fail) throw new Error('denied');
+      return [{ name: '.hidden', directory: false }];
+    } };
+    new DirCommand(access, () => cwd).execute(context, []);
+    assert.equal(harness.messages.at(-1), fail ? `error: cannot read directory: ${cwd}` : '[FILE]  .hidden');
+    assert.equal(harness.document.serializeSvg(), before);
+    assert.equal(harness.document.getLastPath(), '/unchanged.svg');
+    assert.equal(process.cwd(), cwd);
+    assert.equal(harness.history.getUndoDepth(), depth);
+    assert.equal(harness.history.canRedo(), true);
+    assert.equal(star.label(null, harness.document), ' *');
+    harness.run('redo');
+    assert.equal(harness.document.findById('keep')?.readAttribute('x'), 7);
+    harness.run('undo');
+    assert.equal(harness.document.serializeSvg(), before);
+  }
 });
