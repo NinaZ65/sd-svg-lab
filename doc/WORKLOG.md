@@ -226,3 +226,7 @@ box 的代码装配提交 `0fb561a` 只增加新插件包、修改 `CodeAssembly
 `modified-star` 独立保存基线快照，编辑、保存、再编辑、undo 回保存点的状态机与 box 标签顺序均有测试。之后补充插件异常处理、可选装配、四类会话失败路径及三组命令输入。`scripts/verify-transcripts.js` 从 `final` 构建基线，确认关闭可选插件时 Lab 1 输入的原始输出逐字节相同；代码与配置装配在 Lab 1、box、`stats/dir` 三组输入上的原始输出逐字节相同。随后补充 malformed box 的 CLI 读入反馈及原文档、历史不变测试。最后一次完整运行：CLI 52 项、VSCode 6 项均通过，另有命令行冒烟及 Phase 1 验收脚本成功。
 
 两张真实截图入库后再次运行 `npm test`：CLI 52 项和 VSCode 6 项通过，命令行冒烟及 Phase 1 验收脚本成功。再次运行 `node scripts/verify-transcripts.js`，`final` 与关闭可选插件的 Lab 1 会话、代码与配置装配的三组会话均逐字节一致。
+
+## 2026-11-13 — 界面细节 1/6：大纲摘要
+
+用户要求逐项完善六项现有功能细节，每项单独提交。大纲通过 DocumentSymbol.detail 展示显式尺寸、半径或最多 32 个 Unicode 字符的文字摘要；名称仍为标签或标签#id。XML 实体正常解码，CDATA 保留字面含义，嵌套 tspan 文本合并，缺少尺寸时不推算 CSS。扩展构建和 8 项测试通过；未把自动测试记作新增界面截图证据。

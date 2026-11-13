@@ -23,6 +23,12 @@ const { SvgFileDecorationProvider } = require('../out/SvgFileDecorationProvider.
 const { SvgDocumentSymbolProvider } = require('../out/SvgDocumentSymbolProvider.js');
 Module._load = originalLoad;
 
+function symbols(source) {
+  return new SvgDocumentSymbolProvider().provideDocumentSymbols({
+    getText: () => source, positionAt: offset => offset,
+  }, { isCancellationRequested: false });
+}
+
 test('file decoration marks only SVG files, not directories or other files', async () => {
   const provider = new SvgFileDecorationProvider();
   assert.equal((await provider.provideFileDecoration({ path: '/example.svg', type: 1 })).badge, '[]');
@@ -45,4 +51,31 @@ test('document symbol ranges locate source and update on edit', () => {
   const [updated] = provider.provideDocumentSymbols(document(source.replace('id="r"', 'id="new"')), { isCancellationRequested: false });
   assert.equal(updated.children[0].children[0].name, 'rect#new');
   assert.deepEqual(provider.provideDocumentSymbols(document('<svg><g>'), { isCancellationRequested: false }), []);
+});
+
+test('Outline details show explicit geometry without changing symbol names or inventing CSS dimensions', () => {
+  const [svg] = symbols(`<svg width="400" height="220"><g id="flow">
+    <rect data-note='width="fake" id="fake"' id="start" width="120" height="60"/>
+    <circle r="0"/><ellipse rx="10" ry="20"/><rect style="width:30px;height:40px"/>
+    <path d="M0 0"/></g></svg>`);
+  assert.equal(svg.detail, '400 × 220');
+  assert.equal(svg.children[0].detail, '');
+  const [rect, circle, ellipse, styled, path] = svg.children[0].children;
+  assert.equal(rect.name, 'rect#start');
+  assert.equal(rect.detail, '120 × 60');
+  assert.equal(circle.detail, 'r=0');
+  assert.equal(ellipse.detail, 'rx=10 · ry=20');
+  assert.equal(styled.detail, '');
+  assert.equal(path.detail, '');
+});
+
+test('text hints normalize whitespace, handle nested text and XML entities, and keep Unicode intact', () => {
+  const [svg] = symbols('<svg><text> 开始\n<tspan>审核 &amp; &#x1F600;</tspan><!-- omitted --><![CDATA[ <完成> &amp;]]></text><text/></svg>');
+  assert.equal(svg.children[0].name, 'text');
+  assert.equal(svg.children[0].detail, '“开始 审核 & 😀 <完成> &amp;”');
+  assert.equal(svg.children[1].detail, '');
+  assert.equal(symbols(`<svg><text>${'😀'.repeat(33)}</text></svg>`)[0].children[0].detail, `“${'😀'.repeat(32)}…”`);
+  assert.equal(symbols('<svg><text>A &amp; B</text></svg>')[0].children[0].detail, '“A & B”');
+  assert.equal(symbols('<svg><text>已更新</text></svg>')[0].children[0].detail, '“已更新”');
+  assert.deepEqual(symbols('<svg><text>未完成'), []);
 });
