@@ -15,6 +15,8 @@ code --new-window --extensionDevelopmentPath="$PWD/vscode-extension" "$PWD/vscod
 
 示例文件：[example.svg](examples/example.svg)。扩展源码在 `src/`，Node 验证在 `test/`。运行 `npm test` 可验证解析、更新、异常输入、标记文件类型以及符号定位范围。截图证据保存在仓库的 `doc/evidence/lab2/`，应由实际扩展开发窗口取得。
 
+示例是一张“提交—审核—完成”的内容发布流程图：三个步骤统一为 160 × 64 的圆角框，相隔 100 个源码坐标单位，分别以蓝、橙、绿表示输入、处理和完成；编号与文字同时表达步骤，避免仅靠颜色识别。`g#next` 内嵌 `g#result`，步骤文字有意不设 id，用同一份材料演示嵌套、无 id 节点、尺寸和文字摘要。`rect#start` 保留在第 4 行，点击定位仍易于核对。根元素的 title、desc 提供图形的文字说明。
+
 ## API 与边界
 
 点击大纲节点时，提供给 VSCode 的 `selectionRange` 覆盖该元素的完整起始标签，多行属性也在范围内；`range` 保留整个元素及其子树，使容器的归属范围完整。实体解码和文字摘要不会改变源码偏移。实际选中及滚动效果由 VSCode 的原生导航处理。

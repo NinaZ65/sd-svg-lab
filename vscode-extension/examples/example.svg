@@ -1,10 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="400" height="220">
-  <g id="flow">
-    <rect id="start" x="30" y="50" width="120" height="60" fill="#4a90d9"/>
-    <text x="45" y="85">开始</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="260" viewBox="0 0 760 260" role="img" aria-labelledby="flow-title" aria-describedby="flow-description" font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+  <g id="flow" font-size="16" text-anchor="middle">
+    <rect id="start" x="40" y="112" width="160" height="64" rx="12" fill="#e8efff" stroke="#4567c9" stroke-width="2"/>
+    <text x="120" y="150" fill="#294690">用户提交</text>
     <g id="next">
-      <circle id="point" cx="250" cy="80" r="30" fill="#f5a623"/>
+      <rect id="review" x="300" y="112" width="160" height="64" rx="12" fill="#fff4db" stroke="#b67b16" stroke-width="2"/>
+      <text x="380" y="150" fill="#80540b">内容审核</text>
+      <g id="result">
+        <rect id="finish" x="560" y="112" width="160" height="64" rx="12" fill="#e6f4ec" stroke="#39805c" stroke-width="2"/>
+        <text x="640" y="150" fill="#245d40">发布完成</text>
+      </g>
+    </g>
+    <g id="connectors" fill="none" stroke="#8a96a8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path id="to-review" d="M216 144 H280 m-6 -6 6 6 -6 6"/>
+      <path id="to-finish" d="M476 144 H540 m-6 -6 6 6 -6 6"/>
+    </g>
+    <g id="step-numbers" fill="#66748a" font-size="11" letter-spacing="1">
+      <text x="120" y="99">01 · 提交</text>
+      <text x="380" y="99">02 · 审核</text>
+      <text x="640" y="99">03 · 完成</text>
     </g>
   </g>
+  <title id="flow-title">内容发布流程：提交、审核、完成</title>
+  <desc id="flow-description">从左到右三个步骤，以文字和编号标明次序。蓝色表示输入，橙色表示处理，绿色表示完成。</desc>
+  <text id="heading" x="40" y="42" font-size="23" font-weight="600" fill="#263449">内容发布流程</text>
+  <text id="subtitle" x="40" y="67" font-size="13" fill="#66748a">提交清晰，审核有序，完成可见</text>
+  <text id="legend" x="40" y="222" font-size="12" fill="#66748a">蓝色 · 输入　／　橙色 · 处理　／　绿色 · 完成</text>
 </svg>
